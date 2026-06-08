@@ -320,8 +320,8 @@ void main()
     } else if (userInputType == 7 && wall[DISTANCE] != 0) { // DIRECTIONAL WIND BRUSH
       float mvLen = length(userInputMove);
       if (mvLen > 0.0001) {
-        float w4 = smoothstep(userInputValues[BRUSH_SIZE] * texelSize.y, 0.0, dist);
-        vec2 windDir = userInputMove / mvLen;
+float dist7 = length(vec2(absHorizontalDist(userInputValues.x, texCoord.x), userInputValues.y - texCoord.y));
+float w4 = smoothstep(userInputValues[BRUSH_SIZE] * texelSize.y, 0.0, dist7);        vec2 windDir = userInputMove / mvLen;
         float targetSpeed = min(mvLen * 80.0 * userInputValues[BRUSH_INTENSITY], 0.5);
         vec2 targetVel = windDir * targetSpeed;
         float blendStr = clamp(userInputValues[BRUSH_INTENSITY] * w4 * 8.0, 0.0, 0.35);
