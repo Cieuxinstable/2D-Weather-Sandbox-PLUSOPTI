@@ -12197,20 +12197,17 @@ var soundingGraph = {
   async function loadSourceFile(fileName)
   {
     try {
-      var request = new XMLHttpRequest();
-      request.open('GET', fileName, false);
-      request.send(null);
+      const response = await fetch(fileName);
+      if (response.ok)
+        return await response.text();
+      else if (response.status === 404)
+        throw 'File not found: ' + fileName;
+      else
+        throw 'File loading error ' + response.status;
     } catch (error) {
-      await loadingBar.showError('ERROR loading shader files! If you just opened index.html, try again using a local server!');
+      await loadingBar.showError('ERROR loading shader files! Make sure you are using a local server or GitHub Pages!');
       throw error;
     }
-
-    if (request.status === 200)
-      return request.responseText;
-    else if (request.status === 404)
-      throw 'File not found: ' + fileName;
-    else
-      throw 'File loading error' + request.status;
   }
 
   async function loadShader(nameIn)
