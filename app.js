@@ -11179,7 +11179,7 @@ var soundingGraph = {
                 const intens  = 0.002 + ((_ac.intensity || 5) / 10.0) * 0.006;
                 const moveX   = (mv > 0 ? 1 : -1) * intens * (_ac.type === 'L' ? 1.0 : -0.4);
                 const radiusX = _ac.radius * sim_res_y / Math.max(sim_res_x, 1);
-                gl.uniform4f(gl.getUniformLocation(advectionProgram, 'userInputValues'), acPosX, altY, intens, 0.12);
+                gl.uniform4f(gl.getUniformLocation(advectionProgram, 'userInputValues'), acPosX, altY, intens, _ac.radius);
                 gl.uniform2f(gl.getUniformLocation(advectionProgram, 'userInputMove'), moveX, radiusX);
                 gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), 8);
                 gl.uniform1i(gl.getUniformLocation(advectionProgram, 'wrapHorizontally'), guiControls.wrapHorizontally ? 1 : 0);

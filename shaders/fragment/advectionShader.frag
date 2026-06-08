@@ -330,21 +330,21 @@ void main()
       }
 
     } else if (userInputType == 8 && wall[DISTANCE] != 0) { // ACTION CENTER WIND
-      // userInputValues: x=centerX, y=altY, z=intensity, w=altBand (hauteur bande)
+      // userInputValues: x=centerX, y=altY, z=intensity, w=radius (en texCoord.y)
       // userInputMove: x=windSpeed (E/W), y=radiusX (rayon horizontal)
-      float distX   = absHorizontalDist(userInputValues.x, texCoord.x);
-      float distY   = abs(texCoord.y - userInputValues.y);
-      float altBand = userInputValues[BRUSH_SIZE]; // hauteur bande en texCoord
-      float radiusX = userInputMove.y;             // rayon X de la dépression
+      // Masque circulaire doux comme la brosse, mais centré sur la dépression
+      float radiusY = userInputValues[BRUSH_SIZE];   // rayon vertical
+      float radiusX = userInputMove.y;               // rayon horizontal
+      // Distance normalisée elliptique (cercle dans la dépression)
+      float dx = absHorizontalDist(userInputValues.x, texCoord.x) / max(radiusX, 0.0001);
+      float dy = (texCoord.y - userInputValues.y)               / max(radiusY, 0.0001);
+      float ellipseDist = sqrt(dx*dx + dy*dy);
+      // Poids doux comme la brosse (smoothstep depuis le bord vers le centre)
+      float w8 = smoothstep(1.0, 0.0, ellipseDist);
 
-      // Poids Y : bande à l'altitude cible
-      float wY = smoothstep(altBand, 0.0, distY);
-      // Poids X : limité au rayon horizontal
-      float wX = radiusX > 0.0 ? smoothstep(radiusX, radiusX * 0.2, distX) : 0.0;
-
-      float w8 = wY * wX;
       if (w8 > 0.001) {
-        base.x += userInputMove.x * w8 * userInputValues[BRUSH_INTENSITY] * 5.0;
+        // Déplacer l'air horizontalement comme la brosse vent
+        base.x += userInputMove.x * 5.0 * w8 * userInputValues[BRUSH_INTENSITY];
       }
 
     } else if (userInputType >= 10) {               // wall
