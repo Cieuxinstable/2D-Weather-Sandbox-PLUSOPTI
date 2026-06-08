@@ -5707,40 +5707,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     fluidParams_folder.add(guiControls, 'wind', -1.0, 1.0, 0.01)
       .onChange(function() {
         gl.useProgram(velocityProgram);
-        // Vent : base GUI + contribution progressive des centres d'action
-        let totalWind = guiControls.wind;
-        let maxWindAltNorm = 1.0; // par défaut pas de cap
-        if (guiControls.actionCentersEnabled && actionCenters.length > 0) {
-          let windAltSum = 0;
-          for (const ac of actionCenters) {
-            const intensity = ac.intensity  || 5;
-            const moveSpeed = ac.moveSpeed  !== undefined ? ac.moveSpeed : 1.0;
-            // Direction du vent liée au déplacement de la dépression
-            // L qui va vers E → flux d'ouest → vent positif
-            // L qui va vers W → flux d'est → vent négatif
-            // H inverse, plus faible
-            const windStr = (intensity / 10.0) * 0.08;
-            const dir     = moveSpeed >= 0 ? 1 : (moveSpeed < 0 ? -1 : 0);
-            if (ac.type === 'L')
-              totalWind += dir * windStr;
-            else
-              totalWind -= dir * windStr * 0.3;
-            windAltSum += (ac.windAlt || 1500);
-          }
-          totalWind = Math.max(-1.0, Math.min(1.0, totalWind));
-          // Altitude max vent : moyenne des centres
-          const avgAlt = windAltSum / actionCenters.length;
-          maxWindAltNorm = Math.min(avgAlt / Math.max(guiControls.simHeight, 1), 1.0);
-        }
-        // Vent progressif — ramping pour éviter ondes de choc
-        if (typeof currentSimWind === 'undefined') window.currentSimWind = guiControls.wind;
-        const windRampSpeed = 0.00002; // unité/ms → ~5s pour changer de 0.1
-        if (currentSimWind < totalWind)
-          currentSimWind = Math.min(currentSimWind + windRampSpeed * dtAC, totalWind);
-        else if (currentSimWind > totalWind)
-          currentSimWind = Math.max(currentSimWind - windRampSpeed * dtAC, totalWind);
-        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'wind'), currentSimWind);
-        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'windMaxAlt'), maxWindAltNorm);
+        // Vent de base uniquement (les centres d'action influencent via guiControls.wind)
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'wind'), guiControls.wind);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'windMaxAlt'), 1.0);
       })
       .name('Wind');
 
@@ -5810,7 +5779,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         'Vegetation' : 'TOOL_VEGETATION',
         'Snow' : 'TOOL_WALL_SNOW',
         'Wind' : 'TOOL_WIND',
-        'Wind brush' : 'TOOL_WIND_DIR',
+
         'H (Anti.)' : 'TOOL_ANTICYCLONE',
         'L (Dep.)' : 'TOOL_DEPRESSION',
         'Weather Station' : 'TOOL_STATION',
@@ -9133,8 +9102,7 @@ var soundingGraph = {
       guiControls.tool = 'TOOL_WALL_SNOW';
     } else if (event.code == 'KeyP') {
       guiControls.tool = 'TOOL_WIND';
-    } else if (event.code == 'BracketRight') {
-      guiControls.tool = 'TOOL_WIND_DIR';
+
     } else if (event.code == 'Backslash') {
       if (!event.shiftKey)
         guiControls.tool = 'TOOL_ANTICYCLONE';
@@ -12191,25 +12159,44 @@ var soundingGraph = {
 
   // Update action center positions and wind influence each frame
   function updateActionCenters(dt) {
-    if (!guiControls.actionCentersEnabled) return;
-    for (const ac of actionCenters) {
-      const intensity  = ac.intensity  || 5;
-      const moveSpeed  = ac.moveSpeed  !== undefined ? ac.moveSpeed : 1.0; // -5 to +5
-      const windAlt    = ac.windAlt    || 1500;
+    if (!guiControls.actionCentersEnabled || actionCenters.length === 0) return;
 
-      // Déplacement : moveSpeed en unités sim/s, 0 = stationnaire
-      const speedPerMs = Math.abs(moveSpeed) * 0.000008;
-      const dir        = moveSpeed >= 0 ? 1 : -1;
-      if (moveSpeed !== 0)
+    // Calculer la contribution totale des centres sur guiControls.wind
+    let windTarget = 0.0;
+    for (const ac of actionCenters) {
+      const intensity = ac.intensity  || 5;
+      const moveSpeed = ac.moveSpeed  !== undefined ? ac.moveSpeed : 1.0;
+
+      // Déplacement progressif
+      if (moveSpeed !== 0) {
+        const speedPerMs = Math.abs(moveSpeed) * 0.000004;
+        const dir = moveSpeed > 0 ? 1 : -1;
         ac.x = mod(ac.x + dir * speedPerMs * dt, 1.0);
+      }
 
       // Pression cœur
       ac.corePressure = ac.type === 'H'
         ? 1025 + intensity * 2
-        : 990  - intensity * 3;
+        : 990 - intensity * 3;
 
-      ac.windAlt = windAlt;
+      // Contribution au vent : L vers E = flux W (vent positif)
+      // intensité 1-10 → contribution max ±0.3 sur guiControls.wind
+      const windContrib = (intensity / 10.0) * 0.3;
+      const dir = ac.moveSpeed > 0 ? 1 : (ac.moveSpeed < 0 ? -1 : 0);
+      if (ac.type === 'L')
+        windTarget += dir * windContrib;
+      else
+        windTarget -= dir * windContrib * 0.4;
     }
+
+    windTarget = Math.max(-1.0, Math.min(1.0, windTarget));
+
+    // Ramping progressif sur guiControls.wind (uniquement si centres actifs)
+    const ramp = 0.00005 * dt;
+    if (guiControls.wind < windTarget)
+      guiControls.wind = Math.min(guiControls.wind + ramp, windTarget);
+    else if (guiControls.wind > windTarget)
+      guiControls.wind = Math.max(guiControls.wind - ramp, windTarget);
   }
 
   function drawActionCenters() {
