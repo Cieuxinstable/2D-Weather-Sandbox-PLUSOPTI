@@ -342,7 +342,7 @@
             display: block;
             width: 100%;
             height: auto;
-            max-height: 240px;
+            max-height: 300px;
             object-fit: contain;
         }
 
@@ -961,7 +961,7 @@
                         </div>
                         <div class="field-group">
                             <span class="field-label">Station</span>
-                            <select id="stationSelect"></select>
+                            <select id="stationSelect" onchange="prepareSounding();"></select>
                         </div>
                         <div class="field-group">
                             <span class="field-label">Date</span>
@@ -1002,7 +1002,7 @@
                         <div class="res-row">
                             <div class="res-header">
                                 <span class="res-name">Horizontal resolution</span>
-                                <span class="res-value" id="simResShowX">—</span>
+                                <output id="simResShowX" class="res-value">—</output>
                             </div>
                             <input type="range" min="100" max="16000" value="3000" step="100" id="simResSelX" />
                             <div class="world-info" id="simWorldProperties">Cellheight: 40m · Sim width: 40 km</div>
@@ -1010,7 +1010,7 @@
                         <div class="res-row">
                             <div class="res-header">
                                 <span class="res-name">Vertical resolution</span>
-                                <span class="res-value" id="simResShowY">—</span>
+                                <output id="simResShowY" class="res-value">—</output>
                             </div>
                             <input type="range" min="100" max="500" value="300" step="10" id="simResSelY" />
                             <div class="res-warn" id="simResYWarning">⚠ Not optimized — may be buggy</div>
@@ -1018,7 +1018,7 @@
                         <div class="res-row">
                             <div class="res-header">
                                 <span class="res-name">Simulation height</span>
-                                <span class="res-value" id="simHeightShow">—</span>
+                                <output id="simHeightShow" class="res-value">—</output>
                             </div>
                             <input type="range" min="5000" max="15000" value="12000" step="100" id="simHeightSel" />
                             <div class="res-warn" id="simHeightWarning">⚠ Not optimized — may be buggy</div>

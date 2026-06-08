@@ -1214,7 +1214,7 @@ const guiControls_default = {
   auto_IterPerFrame : true,
   sound : true,
   showActionCenters : true,
-  showIsobars : false,
+  showIsobars : true,
   actionCentersEnabled : true,
   dryLapseRate : 10.0,     // Real: 9.8 degrees / km
   simHeight : 12000,       // meters
@@ -5706,7 +5706,20 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     fluidParams_folder.add(guiControls, 'wind', -1.0, 1.0, 0.01)
       .onChange(function() {
         gl.useProgram(velocityProgram);
-        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'wind'), guiControls.wind);
+        // Combine GUI wind + action centers wind contribution
+        let totalWind = guiControls.wind;
+        if (guiControls.actionCentersEnabled) {
+          for (const ac of actionCenters) {
+            const windStr = (ac.intensity / 10.0) * 0.15; // max 0.15 contribution
+            const dir = ac.dirEast ? 1 : -1;
+            // Low = flux d'ouest (vers est), High = flux inverse plus faible
+            totalWind += ac.type === 'L'
+              ? dir * windStr
+              : -dir * windStr * 0.4;
+          }
+          totalWind = Math.max(-1.0, Math.min(1.0, totalWind));
+        }
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'wind'), totalWind);
       })
       .name('Wind');
 
@@ -6145,6 +6158,17 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     pressure_folder.add(guiControls, 'actionCentersEnabled').name('Enable H/L tools').listen();
     pressure_folder.add(guiControls, 'showActionCenters').name('Show H/L circles').listen();
     pressure_folder.add(guiControls, 'showIsobars').name('Show isobars').listen();
+    pressure_folder.add({clearCenters: function() { actionCenters = []; }}, 'clearCenters').name('Clear all H/L');
+    pressure_folder.add({
+      editLast: function() {
+        if (actionCenters.length === 0) return;
+        const ac = actionCenters[actionCenters.length - 1];
+        const intStr = prompt('Intensity 1-10 for ' + ac.label + ' (current: ' + ac.intensity + '):', ac.intensity);
+        if (intStr !== null) ac.intensity = Math.max(1, Math.min(10, parseInt(intStr) || ac.intensity));
+        const dirStr = prompt('Direction E or W for ' + ac.label + ' (current: ' + (ac.dirEast ? 'E' : 'W') + '):', ac.dirEast ? 'E' : 'W');
+        if (dirStr !== null) ac.dirEast = dirStr.trim().toUpperCase() !== 'W';
+      }
+    }, 'editLast').name('Edit last H/L...');
     soundings_folder.add(guiControls, 'showCAPE').name('Show CAPE').listen();
     soundings_folder.add(guiControls, 'showCIN').name('Show CIN').listen();
     soundings_folder.add(guiControls, 'showMLCAPE').name('Show MLCAPE').listen();
@@ -10993,13 +11017,18 @@ var soundingGraph = {
           if (!wasLeftMousePressed) {
             const type = guiControls.tool == 'TOOL_ANTICYCLONE' ? 'H' : 'L';
             const radiusNorm = guiControls.brushSize * 0.5 / sim_res_y;
-            actionCenters.push({
-              type   : type,
-              x      : mod(mouseXinSim, 1.0),
-              y      : clamp(mouseYinSim, 0.0, 1.0),
-              radius : radiusNorm,
-              label  : type + (actionCenters.length + 1)
-            });
+            const newAC = {
+              type      : type,
+              x         : mod(mouseXinSim, 1.0),
+              y         : clamp(mouseYinSim, 0.0, 1.0),
+              radius    : radiusNorm,
+              label     : type + (actionCenters.length + 1),
+              intensity : 5,           // 1-10 creusement
+              dirEast   : true,        // déplacement vers l'est
+              speed     : 0.0,         // vitesse calculée depuis intensity
+              corePressure : type === 'H' ? 1025 : 990, // hPa cœur
+            };
+            actionCenters.push(newAC);
           }
           // Keep physics active while mouse held (brush effect)
           inputType = guiControls.tool == 'TOOL_ANTICYCLONE' ? 5 : 6;
@@ -12027,7 +12056,11 @@ var soundingGraph = {
     }
   }
 
-  // ── Draw action centers (H/L circles) ──────────────────────────────────
+  // ── Update + Draw action centers (H/L circles) ─────────────────────────
+  const nowAC = performance.now ? performance.now() : Date.now();
+  const dtAC  = lastACUpdateTime > 0 ? Math.min(nowAC - lastACUpdateTime, 100) : 16;
+  lastACUpdateTime = nowAC;
+  if (!guiControls.paused) updateActionCenters(dtAC);
   drawActionCenters();
 
   drawRadarRangeOverlay();
@@ -12052,29 +12085,49 @@ var soundingGraph = {
   // ── Action Centers overlay canvas ──────────────────────────────────────
   let actionCenterCanvas = null;
   let actionCenterCtx    = null;
+  let lastACUpdateTime   = 0;
 
   function initActionCenterCanvas() {
     if (actionCenterCanvas) return;
     actionCenterCanvas = document.createElement('canvas');
-    actionCenterCanvas.style.position    = 'fixed';
-    actionCenterCanvas.style.left        = '0px';
-    actionCenterCanvas.style.top         = '0px';
-    actionCenterCanvas.style.zIndex      = '1';
+    actionCenterCanvas.style.position      = 'fixed';
+    actionCenterCanvas.style.left          = '0px';
+    actionCenterCanvas.style.top           = '0px';
+    actionCenterCanvas.style.zIndex        = '1';
     actionCenterCanvas.style.pointerEvents = 'none';
     document.body.appendChild(actionCenterCanvas);
     actionCenterCtx = actionCenterCanvas.getContext('2d');
   }
 
+  // Update action center positions and wind influence each frame
+  function updateActionCenters(dt) {
+    if (!guiControls.actionCentersEnabled) return;
+    for (const ac of actionCenters) {
+      // Speed: intensity 1→10 maps to 0.00001→0.00008 sim units/ms
+      const baseSpeed = 0.00001 + (ac.intensity - 1) / 9 * 0.00007;
+      ac.speed = baseSpeed;
+      // Move east or west
+      const dir = ac.dirEast ? 1 : -1;
+      ac.x = mod(ac.x + dir * baseSpeed * dt, 1.0);
+      // Core pressure: H = 1025 + intensity*2, L = 990 - intensity*3
+      ac.corePressure = ac.type === 'H'
+        ? 1025 + ac.intensity * 2
+        : 990  - ac.intensity * 3;
+    }
+  }
+
   function drawActionCenters() {
     initActionCenterCanvas();
-    if (actionCenterCanvas.width  != canvas.width)  actionCenterCanvas.width  = canvas.width;
-    if (actionCenterCanvas.height != canvas.height) actionCenterCanvas.height = canvas.height;
+    if (actionCenterCanvas.width  !== canvas.width)  actionCenterCanvas.width  = canvas.width;
+    if (actionCenterCanvas.height !== canvas.height) actionCenterCanvas.height = canvas.height;
     actionCenterCtx.clearRect(0, 0, actionCenterCanvas.width, actionCenterCanvas.height);
 
     if (!guiControls.showActionCenters && !guiControls.showIsobars) return;
     if (actionCenters.length === 0) return;
 
-    const domRect = getSimDomainScreenRect();
+    const isobarStep  = 4;    // hPa entre chaque isobare
+    const isobarCount = 4;    // nombre d'isobares
+    const basePressure = 1013; // hPa environnement
 
     for (const ac of actionCenters) {
       const isH  = ac.type === 'H';
@@ -12082,52 +12135,100 @@ var soundingGraph = {
       const scrX = simToScreenX(ac.x * sim_res_x);
       const scrY = simToScreenY(ac.y * sim_res_y);
       const rPx  = Math.abs(simToScreenX(ac.x * sim_res_x + ac.radius * sim_res_y) - scrX);
+      const intensity = ac.intensity || 5;
+
+      if (guiControls.showIsobars) {
+        // Isobares concentriques avec valeurs hPa
+        for (let ring = 1; ring <= isobarCount; ring++) {
+          const ringR   = rPx * (0.8 + ring * 0.65);
+          const hpaVal  = isH
+            ? ac.corePressure - ring * isobarStep
+            : ac.corePressure + ring * isobarStep;
+          const alpha   = Math.max(0.15, 0.55 - ring * 0.08);
+
+          actionCenterCtx.beginPath();
+          actionCenterCtx.arc(scrX, scrY, ringR, 0, Math.PI * 2);
+          actionCenterCtx.strokeStyle = col + alpha + ')';
+          actionCenterCtx.lineWidth   = Math.max(1, 2.2 - ring * 0.3);
+          actionCenterCtx.setLineDash([]);
+          actionCenterCtx.stroke();
+
+          // Label hPa sur l'isobare (à droite)
+          const labelX = scrX + ringR * 0.707;
+          const labelY = scrY - ringR * 0.707;
+          actionCenterCtx.font         = 'bold 11px monospace';
+          actionCenterCtx.fillStyle    = col + '0.85)';
+          actionCenterCtx.textAlign    = 'center';
+          actionCenterCtx.textBaseline = 'middle';
+          // Fond semi-transparent pour lisibilité
+          const txt = Math.round(hpaVal) + ' hPa';
+          const tw  = actionCenterCtx.measureText(txt).width;
+          actionCenterCtx.fillStyle = 'rgba(0,0,0,0.45)';
+          actionCenterCtx.fillRect(labelX - tw/2 - 2, labelY - 8, tw + 4, 16);
+          actionCenterCtx.fillStyle = col + '0.95)';
+          actionCenterCtx.fillText(txt, labelX, labelY);
+        }
+      }
 
       if (guiControls.showActionCenters) {
-        // Filled circle glow
+        // Glow
         const grad = actionCenterCtx.createRadialGradient(scrX, scrY, 0, scrX, scrY, rPx);
-        grad.addColorStop(0,   col + '0.18)');
-        grad.addColorStop(0.7, col + '0.10)');
+        grad.addColorStop(0,   col + '0.20)');
+        grad.addColorStop(0.6, col + '0.08)');
         grad.addColorStop(1,   col + '0.0)');
         actionCenterCtx.beginPath();
         actionCenterCtx.arc(scrX, scrY, rPx, 0, Math.PI * 2);
         actionCenterCtx.fillStyle = grad;
         actionCenterCtx.fill();
 
-        // Border circle
+        // Cercle principal pointillé
         actionCenterCtx.beginPath();
         actionCenterCtx.arc(scrX, scrY, rPx, 0, Math.PI * 2);
-        actionCenterCtx.strokeStyle = col + '0.55)';
+        actionCenterCtx.strokeStyle = col + '0.60)';
         actionCenterCtx.lineWidth   = 2;
         actionCenterCtx.setLineDash([8, 5]);
         actionCenterCtx.stroke();
         actionCenterCtx.setLineDash([]);
 
-        // H or L label
-        const fontSize = Math.max(18, Math.min(rPx * 0.45, 52));
-        actionCenterCtx.font      = `bold ${fontSize}px "Syne", sans-serif`;
-        actionCenterCtx.fillStyle = col + '0.90)';
-        actionCenterCtx.textAlign = 'center';
+        // Lettre H ou L
+        const fontSize = Math.max(20, Math.min(rPx * 0.5, 56));
+        actionCenterCtx.font         = 'bold ' + fontSize + 'px "Syne", sans-serif';
+        actionCenterCtx.fillStyle    = col + '0.95)';
+        actionCenterCtx.textAlign    = 'center';
         actionCenterCtx.textBaseline = 'middle';
         actionCenterCtx.fillText(ac.type, scrX, scrY);
-      }
 
-      if (guiControls.showIsobars) {
-        // Draw 3 concentric isobar rings
-        for (let ring = 1; ring <= 3; ring++) {
-          const ringR = rPx * (1 + ring * 0.55);
-          actionCenterCtx.beginPath();
-          actionCenterCtx.arc(scrX, scrY, ringR, 0, Math.PI * 2);
-          actionCenterCtx.strokeStyle = col + (0.30 - ring * 0.07) + ')';
-          actionCenterCtx.lineWidth   = Math.max(1, 2.5 - ring * 0.5);
-          actionCenterCtx.setLineDash([]);
-          actionCenterCtx.stroke();
-        }
+        // Pression cœur sous la lettre
+        const coreFs = Math.max(10, fontSize * 0.35);
+        actionCenterCtx.font      = 'bold ' + coreFs + 'px monospace';
+        actionCenterCtx.fillStyle = col + '0.80)';
+        actionCenterCtx.fillText(Math.round(ac.corePressure) + ' hPa', scrX, scrY + fontSize * 0.6);
+
+        // Flèche de direction de déplacement
+        const arrowLen = rPx * 0.7;
+        const arrowDir = ac.dirEast ? 1 : -1;
+        const ax1 = scrX - arrowDir * arrowLen * 0.4;
+        const ax2 = scrX + arrowDir * arrowLen;
+        actionCenterCtx.beginPath();
+        actionCenterCtx.moveTo(ax1, scrY + rPx * 1.4);
+        actionCenterCtx.lineTo(ax2, scrY + rPx * 1.4);
+        // Pointe
+        actionCenterCtx.lineTo(ax2 - arrowDir * 10, scrY + rPx * 1.4 - 6);
+        actionCenterCtx.moveTo(ax2, scrY + rPx * 1.4);
+        actionCenterCtx.lineTo(ax2 - arrowDir * 10, scrY + rPx * 1.4 + 6);
+        actionCenterCtx.strokeStyle = col + '0.70)';
+        actionCenterCtx.lineWidth   = 2;
+        actionCenterCtx.stroke();
+
+        // Intensité
+        actionCenterCtx.font      = 'bold ' + Math.max(10, coreFs) + 'px monospace';
+        actionCenterCtx.fillStyle = col + '0.70)';
+        actionCenterCtx.fillText('Int.' + intensity, scrX, scrY + rPx * 1.4 + 18);
       }
     }
   }
 
-  function hideOrShowGraph()
+  function hideOrShowGraph()  function hideOrShowGraph()
   {
     ensureSoundingPanel();
     const panelEl = document.getElementById('soundingPanel');
