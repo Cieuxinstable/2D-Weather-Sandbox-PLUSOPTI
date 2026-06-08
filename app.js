@@ -5801,8 +5801,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         'Snow' : 'TOOL_WALL_SNOW',
         'Wind' : 'TOOL_WIND',
         'Wind brush' : 'TOOL_WIND_DIR',
-        'High (Anti.)' : 'TOOL_ANTICYCLONE',
-        'Low (Depr.)' : 'TOOL_DEPRESSION',
+        'H (Anti.)' : 'TOOL_ANTICYCLONE',
+        'L (Dep.)' : 'TOOL_DEPRESSION',
         'Weather Station' : 'TOOL_STATION',
         'Radar Tower' : 'TOOL_RADAR',
         'Sounding Probe' : 'TOOL_SOUNDING',
@@ -6177,17 +6177,21 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     guiControls.acMove       = 1.0;  // -5 (W) to +5 (E), 0=stationary
     guiControls.acWindAlt    = 1500; // 500-3000m
 
+    // Label centre sélectionné
+    guiControls.acSelected = 'none';
+    pressure_folder.add(guiControls, 'acSelected').name('Selected').listen();
+
     pressure_folder.add(guiControls, 'acIntensity', 1, 10, 1)
-      .name('Intensity').listen()
+      .name('Intensity 1-10').listen()
       .onChange(function() { applyACSliders(); });
     pressure_folder.add(guiControls, 'acFlux', -1.0, 1.0, 0.1)
-      .name('Flux N(-1)→S(+1)').listen()
+      .name('Flux N<0 S>0').listen()
       .onChange(function() { applyACSliders(); });
     pressure_folder.add(guiControls, 'acMove', -5.0, 5.0, 0.5)
-      .name('Move W(-5)→E(+5)').listen()
+      .name('Move W<0 E>0').listen()
       .onChange(function() { applyACSliders(); });
     pressure_folder.add(guiControls, 'acWindAlt', 500, 3000, 100)
-      .name('Wind max alt (m)').listen()
+      .name('Wind alt (m)').listen()
       .onChange(function() { applyACSliders(); });
     soundings_folder.add(guiControls, 'showCAPE').name('Show CAPE').listen();
     soundings_folder.add(guiControls, 'showCIN').name('Show CIN').listen();
@@ -10984,7 +10988,23 @@ var soundingGraph = {
       gl.useProgram(advectionProgram);
 
       var inputType = -1;
-      if (leftMousePressed) {
+      // Sélection d'un centre d'action au clic gauche (hors outil H/L)
+    if (leftMousePressed && !wasLeftMousePressed) {
+      if (guiControls.tool !== 'TOOL_ANTICYCLONE' && guiControls.tool !== 'TOOL_DEPRESSION') {
+        for (let i = 0; i < actionCenters.length; i++) {
+          const ac = actionCenters[i];
+          const dx = mod(mouseXinSim - ac.x + 0.5, 1.0) - 0.5;
+          const dy = mouseYinSim - ac.y;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+          if (dist < ac.radius * sim_res_y / sim_res_y * 1.5) {
+            selectAC(i);
+            break;
+          }
+        }
+      }
+    }
+
+    if (leftMousePressed) {
         if (guiControls.tool == 'TOOL_NONE')
           inputType = 0; // only flashlight on
         else if (guiControls.tool == 'TOOL_TEMPERATURE')
@@ -11041,7 +11061,7 @@ var soundingGraph = {
               type      : type,
               x         : mod(mouseXinSim, 1.0),
               y         : clamp(mouseYinSim, 0.0, 1.0),
-              radius    : radiusNorm,
+              radius    : radiusNorm * 4.0,
               label     : type + (actionCenters.length + 1),
               intensity : 5,           // 1-10 creusement
               dirEast   : true,        // déplacement vers l'est
@@ -11056,8 +11076,8 @@ var soundingGraph = {
             guiControls.acMove      = newAC.moveSpeed !== undefined ? newAC.moveSpeed : 1.0;
             guiControls.acWindAlt   = newAC.windAlt   || 1500;
           }
-          // Keep physics active while mouse held (brush effect)
-          inputType = guiControls.tool == 'TOOL_ANTICYCLONE' ? 5 : 6;
+          // No direct shader injection - wind handled globally
+          inputType = -1;
         }
 
         var intensity = guiControls.brushIntensity;
@@ -12087,6 +12107,14 @@ var soundingGraph = {
   const dtAC  = lastACUpdateTime > 0 ? Math.min(nowAC - lastACUpdateTime, 100) : 16;
   lastACUpdateTime = nowAC;
   if (!guiControls.paused) updateActionCenters(dtAC);
+  // Update selected label
+  if (typeof guiControls.acSelected !== 'undefined') {
+    const sidx = selectedACIndex >= 0 && selectedACIndex < actionCenters.length
+      ? selectedACIndex : actionCenters.length - 1;
+    guiControls.acSelected = sidx >= 0
+      ? actionCenters[sidx].label + ' (' + actionCenters[sidx].type + ')'
+      : 'none';
+  }
   drawActionCenters();
 
   drawRadarRangeOverlay();
@@ -12126,6 +12154,7 @@ var soundingGraph = {
     ac.flux      = guiControls.acFlux;
     ac.moveSpeed = guiControls.acMove;
     ac.windAlt   = guiControls.acWindAlt;
+    guiControls.acSelected = ac.label + ' (' + ac.type + ')';
   }
 
   function selectAC(idx) {
@@ -12254,6 +12283,20 @@ var soundingGraph = {
         actionCenterCtx.textAlign    = 'center';
         actionCenterCtx.textBaseline = 'middle';
         actionCenterCtx.fillText(ac.type, scrX, scrY);
+
+        // Indicateur sélection (anneau blanc)
+        const acIdx = actionCenters.indexOf(ac);
+        const isSelected = acIdx === selectedACIndex ||
+          (selectedACIndex < 0 && acIdx === actionCenters.length - 1);
+        if (isSelected) {
+          actionCenterCtx.beginPath();
+          actionCenterCtx.arc(scrX, scrY, rPx * 1.08, 0, Math.PI * 2);
+          actionCenterCtx.strokeStyle = 'rgba(255,255,255,0.7)';
+          actionCenterCtx.lineWidth   = 3;
+          actionCenterCtx.setLineDash([4,3]);
+          actionCenterCtx.stroke();
+          actionCenterCtx.setLineDash([]);
+        }
 
         // Pression cœur sous la lettre
         const coreFs = Math.max(10, fontSize * 0.35);
