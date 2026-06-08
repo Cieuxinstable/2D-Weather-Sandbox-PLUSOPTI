@@ -2028,7 +2028,7 @@ function createAmbientLightFBOs()
 
 class Weatherstation
 {
-  #width = 120; // 100 display size
+  #width = 140; // 100 display size (élargi pour prévision)
   #height = 70; // 55
   #mainDiv;
   #canvas;
@@ -2411,6 +2411,39 @@ class Weatherstation
       }
     }
 
+    // ── Prévision météo symbolique (basée sur humidité, spread T/Td, vent) ──
+    const rh     = this.#relativeHumd;
+    const spread = this.#temperature - this.#dewpoint; // écart T - Td
+    const wind   = this.#velocity;
+    let icon = '☀️';   // par défaut clair
+    let label = '';
+    if (rh >= 95 || spread < 1.0) {
+      // Air saturé → précipitations / orage si instable
+      icon  = this.#temperature > 20 && wind > 8 ? '⛈️' : '🌧️';
+      label = this.#temperature > 20 && wind > 8 ? 'Orage' : 'Pluie';
+    } else if (rh >= 80 || spread < 3.0) {
+      icon  = '🌧️';
+      label = 'Averses';
+    } else if (rh >= 60 || spread < 6.0) {
+      icon  = '⛅';
+      label = 'Variable';
+    } else if (rh >= 40) {
+      icon  = '🌤️';
+      label = 'Éclaircies';
+    } else {
+      icon  = '☀️';
+      label = 'Clair';
+    }
+    // Vent fort → ajouter indicateur
+    const windIcon = wind > 12 ? '💨' : '';
+    c.font = '15px Arial';
+    c.fillStyle = '#FFFFFF';
+    c.fillText(icon + windIcon, 95, 15);
+    if (label) {
+      c.font = '9px Arial';
+      c.fillStyle = '#ffe066';
+      c.fillText(label, 90, 28);
+    }
 
     // Position pointer
     c.beginPath();
@@ -11045,6 +11078,7 @@ var soundingGraph = {
               dirEast   : true,        // déplacement vers l'est
               speed     : 0.0,         // vitesse calculée depuis intensity
               corePressure : type === 'H' ? 1025 : 990, // hPa cœur
+              rampFactor : 0.0,  // montée progressive 0→1 sur 30s
             };
             actionCenters.push(newAC);
             // Auto-select newly placed center
@@ -11179,8 +11213,8 @@ var soundingGraph = {
               const dirSign = (effectiveMv > 0 ? 1 : -1) * (_ac.type === 'L' ? 1.0 : -0.4);
               const altY    = (_ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
               const ramp    = _ac.rampFactor !== undefined ? _ac.rampFactor : 1.0;
-              const intens  = 0.6;   // intensité brosse très forte
-              const moveX   = dirSign * ((_ac.intensity || 5) / 10.0) * 0.6 * ramp;
+              const intens  = 0.05;  // intensité brosse modérée
+              const moveX   = dirSign * ((_ac.intensity || 5) / 10.0) * 0.05 * ramp;
               const brushSz = _ac.radius * sim_res_y;
               const acPosX  = guiControls.wrapHorizontally ? mod(_ac.x, 1.0) : clamp(_ac.x, 0.0, 1.0);
               gl.uniform4f(gl.getUniformLocation(advectionProgram, 'userInputValues'),
@@ -12188,6 +12222,11 @@ var soundingGraph = {
   var acWindInjection = { active: false, moveX: 0.0, altY: 0.5, intensity: 0.005 };
 
   function updateActionCenters(dt) {
+    // Montée progressive du vent (~30s)
+    for (const ac of actionCenters) {
+      if (ac.rampFactor === undefined) ac.rampFactor = 0.0;
+      ac.rampFactor = Math.min(1.0, ac.rampFactor + dt / 30000.0);
+    }
     if (!guiControls.actionCentersEnabled || actionCenters.length === 0) {
       acWindInjection.active = false;
       return;
