@@ -5707,7 +5707,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     fluidParams_folder.add(guiControls, 'wind', -1.0, 1.0, 0.01)
       .onChange(function() {
         gl.useProgram(velocityProgram);
-        // Vent de base uniquement (les centres d'action influencent via guiControls.wind)
+        // Vent de base GUI uniquement
         gl.uniform1f(gl.getUniformLocation(velocityProgram, 'wind'), guiControls.wind);
         gl.uniform1f(gl.getUniformLocation(velocityProgram, 'windMaxAlt'), 1.0);
       })
@@ -11083,6 +11083,23 @@ var soundingGraph = {
       }
       gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), inputType);
 
+      // ── Injection vent basses couches depuis centres d'action ────────────
+      // Seulement si l'utilisateur ne peint pas lui-même
+      if (!leftMousePressed && acWindInjection.active && guiControls.actionCentersEnabled) {
+        // whole-width brush (posX = -1) à l'altitude cible
+        gl.uniform4f(gl.getUniformLocation(advectionProgram, 'userInputValues'),
+          -1.0,                        // posX = -1 → whole width
+          acWindInjection.altY,        // posY = altitude normalisée
+          acWindInjection.intensity,   // intensity
+          sim_res_y * 0.12             // brushSize = 12% de la hauteur sim
+        );
+        gl.uniform2f(gl.getUniformLocation(advectionProgram, 'userInputMove'),
+          acWindInjection.moveX,       // direction E/W
+          0.0                          // pas de composante verticale
+        );
+        gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), 4); // wind drag
+        gl.uniform1i(gl.getUniformLocation(advectionProgram, 'wrapHorizontally'), guiControls.wrapHorizontally);
+      }
 
       // guiControls.IterPerFrame = 1.0 / timePerIteration * 3600 / 60.0;
 
@@ -12158,45 +12175,58 @@ var soundingGraph = {
   }
 
   // Update action center positions and wind influence each frame
-  function updateActionCenters(dt) {
-    if (!guiControls.actionCentersEnabled || actionCenters.length === 0) return;
+  // Vent injecté par les centres d'action (en sim units/frame)
+  var acWindInjection = { active: false, moveX: 0.0, altY: 0.5, intensity: 0.005 };
 
-    // Calculer la contribution totale des centres sur guiControls.wind
-    let windTarget = 0.0;
+  function updateActionCenters(dt) {
+    if (!guiControls.actionCentersEnabled || actionCenters.length === 0) {
+      acWindInjection.active = false;
+      return;
+    }
+
+    let totalMoveX   = 0.0;
+    let totalIntens  = 0.0;
+    let totalAltY    = 0.0;
+    let count        = 0;
+
     for (const ac of actionCenters) {
       const intensity = ac.intensity  || 5;
       const moveSpeed = ac.moveSpeed  !== undefined ? ac.moveSpeed : 1.0;
+      const windAlt   = ac.windAlt    || 1500;
 
-      // Déplacement progressif
+      // ── Déplacement du centre ──────────────────────────────────────────
       if (moveSpeed !== 0) {
-        const speedPerMs = Math.abs(moveSpeed) * 0.000004;
-        const dir = moveSpeed > 0 ? 1 : -1;
-        ac.x = mod(ac.x + dir * speedPerMs * dt, 1.0);
+        const speedPerMs = Math.abs(moveSpeed) * 0.000003;
+        ac.x = mod(ac.x + (moveSpeed > 0 ? 1 : -1) * speedPerMs * dt, 1.0);
       }
 
-      // Pression cœur
+      // ── Pression cœur ─────────────────────────────────────────────────
       ac.corePressure = ac.type === 'H'
         ? 1025 + intensity * 2
-        : 990 - intensity * 3;
+        : 990  - intensity * 3;
 
-      // Contribution au vent : L vers E = flux W (vent positif)
-      // intensité 1-10 → contribution max ±0.3 sur guiControls.wind
-      const windContrib = (intensity / 10.0) * 0.3;
-      const dir = ac.moveSpeed > 0 ? 1 : (ac.moveSpeed < 0 ? -1 : 0);
-      if (ac.type === 'L')
-        windTarget += dir * windContrib;
-      else
-        windTarget -= dir * windContrib * 0.4;
+      // ── Contribution vent ─────────────────────────────────────────────
+      // L qui se déplace vers E → flux venant de l'O → moveX positif
+      // L qui se déplace vers W → flux venant de l'E → moveX négatif
+      // H → inverse, atténué
+      const dir     = moveSpeed > 0 ? 1 : (moveSpeed < 0 ? -1 : 0);
+      const contrib = dir * (intensity / 10.0) * (ac.type === 'L' ? 1.0 : -0.4);
+      totalMoveX  += contrib;
+      totalIntens += intensity / 10.0;
+      // Altitude : windAlt en mètres → normalisé 0-1 (simHeight = 12000m par défaut)
+      totalAltY   += windAlt / Math.max(guiControls.simHeight, 1000);
+      count++;
     }
 
-    windTarget = Math.max(-1.0, Math.min(1.0, windTarget));
-
-    // Ramping progressif sur guiControls.wind (uniquement si centres actifs)
-    const ramp = 0.00005 * dt;
-    if (guiControls.wind < windTarget)
-      guiControls.wind = Math.min(guiControls.wind + ramp, windTarget);
-    else if (guiControls.wind > windTarget)
-      guiControls.wind = Math.max(guiControls.wind - ramp, windTarget);
+    if (count > 0) {
+      // moveX final : intensité max ~0.002 par frame (très léger, progressif)
+      acWindInjection.active   = true;
+      acWindInjection.moveX    = (totalMoveX / count) * 0.0008;
+      acWindInjection.altY     = (totalAltY  / count);
+      acWindInjection.intensity = 0.003 + (totalIntens / count) * 0.005;
+    } else {
+      acWindInjection.active = false;
+    }
   }
 
   function drawActionCenters() {
