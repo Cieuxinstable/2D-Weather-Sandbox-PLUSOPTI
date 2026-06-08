@@ -11045,6 +11045,7 @@ var soundingGraph = {
               dirEast   : true,        // déplacement vers l'est
               speed     : 0.0,         // vitesse calculée depuis intensity
               corePressure : type === 'H' ? 1025 : 990, // hPa cœur
+              rampFactor : 0.0,  // montée progressive 0→1
             };
             actionCenters.push(newAC);
             // Auto-select newly placed center
@@ -11169,23 +11170,30 @@ var soundingGraph = {
             gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_1);
             gl.drawBuffers([ gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2 ]);
 
-            // ── Vent des centres d'action (injecté ici, DANS la boucle) ──
+            // ── Vent des centres d'action : simule une brosse qui drague ──
             if (!leftMousePressed && acWindInjection.active && guiControls.actionCentersEnabled) {
               for (const _ac of actionCenters) {
                 const mv = _ac.moveSpeed !== undefined ? _ac.moveSpeed : 1.0;
                 if (mv === 0) continue;
-                const acPosX  = guiControls.wrapHorizontally ? mod(_ac.x, 1.0) : clamp(_ac.x, 0.0, 1.0);
+                const dirSign = (mv > 0 ? 1 : -1) * (_ac.type === 'L' ? 1.0 : -0.4);
                 const altY    = (_ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
-                const intens  = 0.002 + ((_ac.intensity || 5) / 10.0) * 0.006;
-                const moveX   = (mv > 0 ? 1 : -1) * intens * (_ac.type === 'L' ? 1.0 : -0.4);
-                const radiusX = _ac.radius * sim_res_y / Math.max(sim_res_x, 1);
-                gl.uniform4f(gl.getUniformLocation(advectionProgram, 'userInputValues'), acPosX, altY, intens, _ac.radius);
-                gl.uniform2f(gl.getUniformLocation(advectionProgram, 'userInputMove'), moveX, radiusX);
-                gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), 8);
+                const intens  = guiControls.brushIntensity; // même que la brosse
+                // moveX = déplacement simulé de souris (comme un drag continu)
+                const ramp    = _ac.rampFactor !== undefined ? _ac.rampFactor : 1.0;
+                const moveX   = dirSign * ((_ac.intensity || 5) / 10.0) * 0.0015 * ramp;
+                // BrushSize = rayon vertical de la dépression en cellules
+                const brushSz = _ac.radius * sim_res_y;
+                const acPosX  = guiControls.wrapHorizontally ? mod(_ac.x, 1.0) : clamp(_ac.x, 0.0, 1.0);
+
+                // Utiliser inputType 4 (brosse vent) avec masque circulaire normal
+                gl.uniform4f(gl.getUniformLocation(advectionProgram, 'userInputValues'),
+                  acPosX, altY, intens, brushSz);
+                gl.uniform2f(gl.getUniformLocation(advectionProgram, 'userInputMove'),
+                  moveX, 0.0);
+                gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), 4);
                 gl.uniform1i(gl.getUniformLocation(advectionProgram, 'wrapHorizontally'), guiControls.wrapHorizontally ? 1 : 0);
                 gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
               }
-              // Remettre l'inputType du joueur pour le prochain draw
               gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), inputType);
             }
 
@@ -12185,6 +12193,11 @@ var soundingGraph = {
     if (!guiControls.actionCentersEnabled || actionCenters.length === 0) {
       acWindInjection.active = false;
       return;
+    }
+    // Montée progressive du vent (~15s pour atteindre pleine puissance)
+    for (const ac of actionCenters) {
+      if (ac.rampFactor === undefined) ac.rampFactor = 0.0;
+      ac.rampFactor = Math.min(1.0, ac.rampFactor + dt / 15000.0);
     }
 
     let totalMoveX   = 0.0;
