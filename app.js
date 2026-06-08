@@ -12228,7 +12228,7 @@ var soundingGraph = {
     }
   }
 
-  function hideOrShowGraph()  function hideOrShowGraph()
+  function hideOrShowGraph()
   {
     ensureSoundingPanel();
     const panelEl = document.getElementById('soundingPanel');
