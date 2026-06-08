@@ -11177,10 +11177,11 @@ var soundingGraph = {
                 if (mv === 0) continue;
                 const dirSign = (mv > 0 ? 1 : -1) * (_ac.type === 'L' ? 1.0 : -0.4);
                 const altY    = (_ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
-                const intens  = guiControls.brushIntensity; // même que la brosse
-                // moveX = déplacement simulé de souris (comme un drag continu)
                 const ramp    = _ac.rampFactor !== undefined ? _ac.rampFactor : 1.0;
-                const moveX   = dirSign * ((_ac.intensity || 5) / 10.0) * 0.0015 * ramp;
+                // intensité fixe forte pour bien déplacer l'air
+                const intens  = 0.04;
+                // moveX = déplacement simulé fort (comme un gros drag de souris)
+                const moveX   = dirSign * ((_ac.intensity || 5) / 10.0) * 0.04 * ramp;
                 // BrushSize = rayon vertical de la dépression en cellules
                 const brushSz = _ac.radius * sim_res_y;
                 const acPosX  = guiControls.wrapHorizontally ? mod(_ac.x, 1.0) : clamp(_ac.x, 0.0, 1.0);
