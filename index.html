@@ -3,11 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <title>2D Weather Sandbox PLUS</title>
-    <script type="text/javascript" src="libraries/dat.gui.min.js"></script>
-    <script type="text/javascript" src="libraries/pako.min.js"></script>
-    <script type="text/javascript" src="libraries/chart.js"></script>
-    <script type="text/javascript" src="libraries/chartjs-adapter-date-fns.js"></script>
-    <script type="text/javascript" src="app.js" defer></script>
+
     <link rel="shortcut icon" type="image/x-icon" href="favicon.ico">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -913,7 +909,7 @@
     </style>
 </head>
 
-<body id="body">
+<body id="body" onload="updateSetupSliders(); initHourBtns();">
 
     <!-- ── NAV ─────────────────────────────────────────────────── -->
     <nav class="main-nav">
@@ -1124,13 +1120,13 @@
         Your browser does not support HTML5, you must be using a really old browser!
     </canvas>
 
-    <script>
-        // Init after DOM + scripts loaded
-        window.addEventListener('DOMContentLoaded', function() {
-            if (typeof updateSetupSliders === 'function') updateSetupSliders();
-            initHourBtns();
-        });
+    <script type="text/javascript" src="libraries/dat.gui.min.js"></script>
+    <script type="text/javascript" src="libraries/pako.min.js"></script>
+    <script type="text/javascript" src="libraries/chart.js"></script>
+    <script type="text/javascript" src="libraries/chartjs-adapter-date-fns.js"></script>
+    <script type="text/javascript" src="app.js"></script>
 
+    <script>
         // Hour button logic
         function initHourBtns() {
             const btns = document.querySelectorAll('.hour-btn');
