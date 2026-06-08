@@ -1213,6 +1213,9 @@ const guiControls_default = {
   IterPerFrame : 6,
   auto_IterPerFrame : true,
   sound : true,
+  showActionCenters : true,
+  showIsobars : false,
+  actionCentersEnabled : true,
   dryLapseRate : 10.0,     // Real: 9.8 degrees / km
   simHeight : 12000,       // meters
   twelveHourClock : false, // only for display.  false = metric
@@ -3149,6 +3152,7 @@ class RadarTower
 
 let weatherStations = []; // array holding all weather stations
 let radarTowers = [];    // array holding all radar towers
+let actionCenters = [];  // array holding H/L pressure centers
 let radarNeedsMeasure = false;
 
 
@@ -6132,10 +6136,24 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     var soundings_folder = datGui.addFolder('Soundings');
     soundings_folder.add(guiControls, 'showGraph').onChange(hideOrShowGraph).name('Show Sounding Graph').listen();
     soundings_folder.add(guiControls, 'soundingSmoothing').name('Smooth Sounding (±2 cols)').listen().onChange(() => { soundingProbeNeedsRedraw = true; });
+
+    // ── Action Centers & Isobars ──────────────────────────────────────────
+    var pressure_folder = datGui.addFolder('Pressure Systems');
+    pressure_folder.add(guiControls, 'actionCentersEnabled').name('Enable H/L tools').listen();
+    pressure_folder.add(guiControls, 'showActionCenters').name('Show H/L circles').listen();
+    pressure_folder.add(guiControls, 'showIsobars').name('Show isobars').listen();
     soundings_folder.add(guiControls, 'showCAPE').name('Show CAPE').listen();
     soundings_folder.add(guiControls, 'showCIN').name('Show CIN').listen();
     soundings_folder.add(guiControls, 'showMLCAPE').name('Show MLCAPE').listen();
     soundings_folder.add(guiControls, 'showCAPE03').name('Show 0-3 km CAPE').listen();
+
+    // CAPE live readout (read-only, updated each frame)
+    guiControls.capeDisplay   = '-- J/kg';
+    guiControls.mlCapeDisplay = '-- J/kg';
+    guiControls.cinDisplay    = '-- J/kg';
+    soundings_folder.add(guiControls, 'capeDisplay').name('▶ CAPE (live)').listen();
+    soundings_folder.add(guiControls, 'mlCapeDisplay').name('▶ MLCAPE (live)').listen();
+    soundings_folder.add(guiControls, 'cinDisplay').name('▶ CIN (live)').listen();
 
     // Radar-specific controls
     var radar_folder = datGui.addFolder('Radar');
@@ -8536,6 +8554,13 @@ var soundingGraph = {
       soundingDiagnostics.lcl = lclMeters;
       soundingDiagnostics.liftedIndex = liftedIndex;
       soundingDiagnostics.hailIndex = hailIndex;
+
+      // Update live CAPE display in dat.GUI
+      if (guiControls.capeDisplay !== undefined) {
+        guiControls.capeDisplay   = Number.isFinite(cape)              ? Math.round(cape)              + ' J/kg' : '-- J/kg';
+        guiControls.mlCapeDisplay = Number.isFinite(mlEnergy && mlEnergy.cape ? mlEnergy.cape : null) ? Math.round(mlEnergy.cape) + ' J/kg' : '-- J/kg';
+        guiControls.cinDisplay    = Number.isFinite(cin)               ? Math.round(cin)               + ' J/kg' : '-- J/kg';
+      }
       updateSoundingDiagnosticsUI();
 
 
@@ -8695,6 +8720,7 @@ var soundingGraph = {
 
   var middleMousePressed = false;
   var leftMousePressed = false;
+  var wasLeftMousePressed = false;
   var prevMouseX = 0;
   var prevMouseY = 0;
   var mouseX = 0;
@@ -10959,6 +10985,21 @@ var soundingGraph = {
           inputType = -1; // don't inject into sim
         } else if (guiControls.tool == 'TOOL_RADAR') {
           inputType = -1; // radar placement shouldn't paint into sim
+        } else if ((guiControls.tool == 'TOOL_ANTICYCLONE' || guiControls.tool == 'TOOL_DEPRESSION') && guiControls.actionCentersEnabled) {
+          // Register a persistent action center on first click and apply physics continuously
+          if (!wasLeftMousePressed) {
+            const type = guiControls.tool == 'TOOL_ANTICYCLONE' ? 'H' : 'L';
+            const radiusNorm = guiControls.brushSize * 0.5 / sim_res_y;
+            actionCenters.push({
+              type   : type,
+              x      : mod(mouseXinSim, 1.0),
+              y      : clamp(mouseYinSim, 0.0, 1.0),
+              radius : radiusNorm,
+              label  : type + (actionCenters.length + 1)
+            });
+          }
+          // Keep physics active while mouse held (brush effect)
+          inputType = guiControls.tool == 'TOOL_ANTICYCLONE' ? 5 : 6;
         }
 
         var intensity = guiControls.brushIntensity;
@@ -11982,6 +12023,10 @@ var soundingGraph = {
       weatherStations[i].updateCanvas(); // update weather stations
     }
   }
+
+  // ── Draw action centers (H/L circles) ──────────────────────────────────
+  drawActionCenters();
+
   drawRadarRangeOverlay();
   for (i = 0; i < radarTowers.length; i++) {
     radarTowers[i].updateCanvas(); // keep position synced with camera
@@ -11994,11 +12039,90 @@ var soundingGraph = {
     radarNeedsMeasure = false;
   }
 
+    wasLeftMousePressed = leftMousePressed;
     frameNum++;
     requestAnimationFrame(draw);
   }
 
   //////////////////////////////////////////////////////// functions:
+
+  // ── Action Centers overlay canvas ──────────────────────────────────────
+  let actionCenterCanvas = null;
+  let actionCenterCtx    = null;
+
+  function initActionCenterCanvas() {
+    if (actionCenterCanvas) return;
+    actionCenterCanvas = document.createElement('canvas');
+    actionCenterCanvas.style.position    = 'fixed';
+    actionCenterCanvas.style.left        = '0px';
+    actionCenterCanvas.style.top         = '0px';
+    actionCenterCanvas.style.zIndex      = '1';
+    actionCenterCanvas.style.pointerEvents = 'none';
+    document.body.appendChild(actionCenterCanvas);
+    actionCenterCtx = actionCenterCanvas.getContext('2d');
+  }
+
+  function drawActionCenters() {
+    initActionCenterCanvas();
+    if (actionCenterCanvas.width  != canvas.width)  actionCenterCanvas.width  = canvas.width;
+    if (actionCenterCanvas.height != canvas.height) actionCenterCanvas.height = canvas.height;
+    actionCenterCtx.clearRect(0, 0, actionCenterCanvas.width, actionCenterCanvas.height);
+
+    if (!guiControls.showActionCenters && !guiControls.showIsobars) return;
+    if (actionCenters.length === 0) return;
+
+    const domRect = getSimDomainScreenRect();
+
+    for (const ac of actionCenters) {
+      const isH  = ac.type === 'H';
+      const col  = isH ? 'rgba(220,60,60,' : 'rgba(60,120,220,';
+      const scrX = simToScreenX(ac.x * sim_res_x);
+      const scrY = simToScreenY(ac.y * sim_res_y);
+      const rPx  = Math.abs(simToScreenX(ac.x * sim_res_x + ac.radius * sim_res_y) - scrX);
+
+      if (guiControls.showActionCenters) {
+        // Filled circle glow
+        const grad = actionCenterCtx.createRadialGradient(scrX, scrY, 0, scrX, scrY, rPx);
+        grad.addColorStop(0,   col + '0.18)');
+        grad.addColorStop(0.7, col + '0.10)');
+        grad.addColorStop(1,   col + '0.0)');
+        actionCenterCtx.beginPath();
+        actionCenterCtx.arc(scrX, scrY, rPx, 0, Math.PI * 2);
+        actionCenterCtx.fillStyle = grad;
+        actionCenterCtx.fill();
+
+        // Border circle
+        actionCenterCtx.beginPath();
+        actionCenterCtx.arc(scrX, scrY, rPx, 0, Math.PI * 2);
+        actionCenterCtx.strokeStyle = col + '0.55)';
+        actionCenterCtx.lineWidth   = 2;
+        actionCenterCtx.setLineDash([8, 5]);
+        actionCenterCtx.stroke();
+        actionCenterCtx.setLineDash([]);
+
+        // H or L label
+        const fontSize = Math.max(18, Math.min(rPx * 0.45, 52));
+        actionCenterCtx.font      = `bold ${fontSize}px "Syne", sans-serif`;
+        actionCenterCtx.fillStyle = col + '0.90)';
+        actionCenterCtx.textAlign = 'center';
+        actionCenterCtx.textBaseline = 'middle';
+        actionCenterCtx.fillText(ac.type, scrX, scrY);
+      }
+
+      if (guiControls.showIsobars) {
+        // Draw 3 concentric isobar rings
+        for (let ring = 1; ring <= 3; ring++) {
+          const ringR = rPx * (1 + ring * 0.55);
+          actionCenterCtx.beginPath();
+          actionCenterCtx.arc(scrX, scrY, ringR, 0, Math.PI * 2);
+          actionCenterCtx.strokeStyle = col + (0.30 - ring * 0.07) + ')';
+          actionCenterCtx.lineWidth   = Math.max(1, 2.5 - ring * 0.5);
+          actionCenterCtx.setLineDash([]);
+          actionCenterCtx.stroke();
+        }
+      }
+    }
+  }
 
   function hideOrShowGraph()
   {

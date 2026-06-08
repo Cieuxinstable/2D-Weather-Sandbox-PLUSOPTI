@@ -79,6 +79,9 @@
         /* hide nav & intro when game starts */
         body.game-active .main-nav,
         body.game-active #IntroScreen { display: none; }
+        /* hide scanlines when game active */
+        body.game-active::after,
+        body.game-active::before { display: none; }
 
         /* ─── NAV ─────────────────────────────────────────────────── */
         .main-nav {
@@ -793,7 +796,7 @@
         .radar-drawer {
             position: fixed; left: 20px; top: 76px;
             --radar-settings-peek: 72px;
-            --radar-panel-width: min(760px, calc(100vw - 40px));
+            --radar-panel-width: min(520px, calc(100vw - 40px));
             --radar-ui-font: "Cascadia Code", monospace;
             --radar-ui-display: "Cascadia Code", monospace;
             font-family: var(--radar-ui-font);
