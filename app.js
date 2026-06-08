@@ -11094,7 +11094,8 @@ var soundingGraph = {
           const intens   = 0.002 + ((_ac.intensity || 5) / 10.0) * 0.004;
           const moveX    = (mv > 0 ? 1 : -1) * intens * 0.6 * (_ac.type === 'L' ? 1.0 : -0.4);
           // radiusX en texCoord (0-1) : rayon horizontal de la dépression
-          const radiusX  = _ac.radius; // déjà en proportion de sim_res_y, ~0.0–0.5
+          // Convertir rayon de texCoord.y vers texCoord.x (sim_res_y/sim_res_x)
+          const radiusX  = _ac.radius * sim_res_y / Math.max(sim_res_x, 1);
           // altBand : épaisseur de la bande de vent (20% de la hauteur sim)
           const altBand  = 0.15;
 
