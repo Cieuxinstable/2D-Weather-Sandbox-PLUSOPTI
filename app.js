@@ -5707,29 +5707,39 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     fluidParams_folder.add(guiControls, 'wind', -1.0, 1.0, 0.01)
       .onChange(function() {
         gl.useProgram(velocityProgram);
-        // Wind from action centers — basses couches seulement (géré dans shader via uniform)
+        // Vent : base GUI + contribution progressive des centres d'action
         let totalWind = guiControls.wind;
-        if (guiControls.actionCentersEnabled) {
+        let maxWindAltNorm = 1.0; // par défaut pas de cap
+        if (guiControls.actionCentersEnabled && actionCenters.length > 0) {
+          let windAltSum = 0;
           for (const ac of actionCenters) {
-            const intensity  = ac.intensity  || 5;
-            const moveSpeed  = ac.moveSpeed  !== undefined ? ac.moveSpeed : 1.0;
-            const flux       = ac.flux       || 0.0; // -1=cold/N, +1=warm/S (pas d'impact sur vent E/W)
-            const windStr    = (intensity / 10.0) * 0.12;
-            const dir        = moveSpeed >= 0 ? 1 : -1;
-            totalWind += ac.type === 'L'
-              ? dir * windStr
-              : -dir * windStr * 0.3;
+            const intensity = ac.intensity  || 5;
+            const moveSpeed = ac.moveSpeed  !== undefined ? ac.moveSpeed : 1.0;
+            // Direction du vent liée au déplacement de la dépression
+            // L qui va vers E → flux d'ouest → vent positif
+            // L qui va vers W → flux d'est → vent négatif
+            // H inverse, plus faible
+            const windStr = (intensity / 10.0) * 0.08;
+            const dir     = moveSpeed >= 0 ? 1 : (moveSpeed < 0 ? -1 : 0);
+            if (ac.type === 'L')
+              totalWind += dir * windStr;
+            else
+              totalWind -= dir * windStr * 0.3;
+            windAltSum += (ac.windAlt || 1500);
           }
           totalWind = Math.max(-1.0, Math.min(1.0, totalWind));
+          // Altitude max vent : moyenne des centres
+          const avgAlt = windAltSum / actionCenters.length;
+          maxWindAltNorm = Math.min(avgAlt / Math.max(guiControls.simHeight, 1), 1.0);
         }
-        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'wind'), totalWind);
-
-        // Wind altitude cap uniform (basses couches)
-        let maxWindAltNorm = 0.25; // défaut 3000m / 12000m
-        if (guiControls.actionCentersEnabled && actionCenters.length > 0) {
-          const avgAlt = actionCenters.reduce((s, ac) => s + (ac.windAlt || 1500), 0) / actionCenters.length;
-          maxWindAltNorm = avgAlt / guiControls.simHeight;
-        }
+        // Vent progressif — ramping pour éviter ondes de choc
+        if (typeof currentSimWind === 'undefined') window.currentSimWind = guiControls.wind;
+        const windRampSpeed = 0.00002; // unité/ms → ~5s pour changer de 0.1
+        if (currentSimWind < totalWind)
+          currentSimWind = Math.min(currentSimWind + windRampSpeed * dtAC, totalWind);
+        else if (currentSimWind > totalWind)
+          currentSimWind = Math.max(currentSimWind - windRampSpeed * dtAC, totalWind);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'wind'), currentSimWind);
         gl.uniform1f(gl.getUniformLocation(velocityProgram, 'windMaxAlt'), maxWindAltNorm);
       })
       .name('Wind');
