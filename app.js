@@ -1213,6 +1213,8 @@ const guiControls_default = {
   IterPerFrame : 6,
   auto_IterPerFrame : true,
   sound : true,
+  lightningEnabled : true,    // activer/desactiver la foudre
+  lightningReduction : 0,     // 0 = toutes, 100 = aucune
   showActionCenters : true,
   showIsobars : true,
   actionCentersEnabled : true,
@@ -6011,6 +6013,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .name('Evaporation Rate');
 
     precipitation_folder.add(guiControls, 'inactiveDroplets', 0, NUM_DROPLETS).listen().name('Inactive Droplets');
+
+    // ── Contrôles foudre ──
+    precipitation_folder.add(guiControls, 'lightningEnabled').name('⚡ Foudre activée');
+    precipitation_folder.add(guiControls, 'lightningReduction', 0, 100, 5).name('⚡ Réduction (%)');
 
 
     var display_folder = datGui.addFolder('Display');
@@ -11213,16 +11219,19 @@ var soundingGraph = {
               const dirSign = (effectiveMv > 0 ? 1 : -1) * (_ac.type === 'L' ? 1.0 : -0.4);
               const altY    = (_ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
               const ramp    = _ac.rampFactor !== undefined ? _ac.rampFactor : 1.0;
-              const intens  = 0.08;  // intensité modérée
-              const moveX   = dirSign * ((_ac.intensity || 5) / 10.0) * 0.08 * ramp;
+              const intens  = 0.02;  // intensité calibrée ~60-80 km/h (était 0.08 = 299km/h)
+              const moveX   = dirSign * ((_ac.intensity || 5) / 10.0) * 0.02 * ramp;
               // Ellipse aplatie : large en X (toute la dépression), fine en Y (basses couches)
-              const radiusYtex = 0.06;  // épaisseur verticale fixe = basses couches (6% hauteur)
+              const radiusYtex = 0.06;  // épaisseur verticale = basses couches
               const radiusXtex = _ac.radius * sim_res_y / Math.max(sim_res_x, 1) * 1.2;
               const acPosX  = guiControls.wrapHorizontally ? mod(_ac.x, 1.0) : clamp(_ac.x, 0.0, 1.0);
+              // Direction du déplacement pour le gradient avant/arrière (shader)
+              const acDir = effectiveMv > 0 ? 1.0 : -1.0;
               gl.uniform4f(gl.getUniformLocation(advectionProgram, 'userInputValues'),
                 acPosX, altY, intens, radiusYtex);
               gl.uniform2f(gl.getUniformLocation(advectionProgram, 'userInputMove'),
                 moveX, radiusXtex);
+              gl.uniform1f(gl.getUniformLocation(advectionProgram, 'acMoveDir'), acDir);
               gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), 8);
               gl.uniform1i(gl.getUniformLocation(advectionProgram, 'wrapHorizontally'), guiControls.wrapHorizontally ? 1 : 0);
             }
@@ -11338,6 +11347,13 @@ var soundingGraph = {
 
 
               // Extract lightningLocation from precipitationfeedback
+              // Foudre : desactivable + reduction probabiliste
+              let _doLightning = guiControls.lightningEnabled;
+              if (_doLightning && guiControls.lightningReduction > 0) {
+                // reduction% de chance de SAUTER ce strike
+                if (Math.random() * 100 < guiControls.lightningReduction) _doLightning = false;
+              }
+              if (_doLightning) {
               gl.useProgram(lightningLocationProgram);
               gl.uniform1f(gl.getUniformLocation(lightningLocationProgram, 'iterNum'), iterNum);
 
@@ -11358,6 +11374,7 @@ var soundingGraph = {
                   soundSystem.soundThunder(lightningDataValues[0], lightningDataValues[1], Math.pow(lightningDataValues[3], 2.0));
                 }
               }
+              } // fin if (_doLightning)
             }
 
             gl.useProgram(radarFieldUpdateProgram);
