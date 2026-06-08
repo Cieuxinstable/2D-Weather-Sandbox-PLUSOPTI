@@ -11083,22 +11083,46 @@ var soundingGraph = {
       }
       gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), inputType);
 
-      // ── Injection vent basses couches depuis centres d'action ────────────
-      // Seulement si l'utilisateur ne peint pas lui-même
+      // ── Injection vent localisé dans chaque centre d'action ────────────
       if (!leftMousePressed && acWindInjection.active && guiControls.actionCentersEnabled) {
-        // whole-width brush (posX = -1) à l'altitude cible
-        gl.uniform4f(gl.getUniformLocation(advectionProgram, 'userInputValues'),
-          -1.0,                        // posX = -1 → whole width
-          acWindInjection.altY,        // posY = altitude normalisée
-          acWindInjection.intensity,   // intensity
-          sim_res_y * 0.12             // brushSize = 12% de la hauteur sim
-        );
-        gl.uniform2f(gl.getUniformLocation(advectionProgram, 'userInputMove'),
-          acWindInjection.moveX,       // direction E/W
-          0.0                          // pas de composante verticale
-        );
-        gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), 4); // wind drag
-        gl.uniform1i(gl.getUniformLocation(advectionProgram, 'wrapHorizontally'), guiControls.wrapHorizontally);
+        for (const _ac of actionCenters) {
+          // Position X du centre en coordonnées sim normalisées
+          const acPosX = guiControls.wrapHorizontally ? mod(_ac.x, 1.0) : clamp(_ac.x, 0.0, 1.0);
+          // Rayon du cercle en cellules sim
+          const acRadiusCells = _ac.radius * sim_res_y;
+          // BrushSize = rayon du cercle pour couvrir exactement la dépression
+          const brushSz = acRadiusCells * 0.8;
+          // Altitude : centre vertical de la dépression (basses couches)
+          const altY = (_ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
+          // Intensité proportionnelle
+          const intens = 0.003 + ((_ac.intensity || 5) / 10.0) * 0.006;
+          // Direction E/W
+          const mv = _ac.moveSpeed !== undefined ? _ac.moveSpeed : 1.0;
+          const moveX = mv === 0 ? 0 : (mv > 0 ? 1 : -1) * intens * 0.5;
+
+          gl.uniform4f(gl.getUniformLocation(advectionProgram, 'userInputValues'),
+            acPosX,   // posX centré sur la dépression
+            altY,     // posY = altitude basses couches
+            intens,   // intensity
+            brushSz   // brushSize = rayon de la dépression
+          );
+          gl.uniform2f(gl.getUniformLocation(advectionProgram, 'userInputMove'),
+            moveX,    // direction E/W
+            0.0
+          );
+          gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), 4);
+          gl.uniform1i(gl.getUniformLocation(advectionProgram, 'wrapHorizontally'), guiControls.wrapHorizontally);
+
+          // Re-draw pour ce centre (on est dans la boucle itérations)
+          gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_0);
+          gl.drawBuffers([ gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2 ]);
+          gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_1);
+          gl.drawBuffers([ gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2 ]);
+          gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        }
+        // Réinitialiser inputType à -1 pour la suite
+        gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), -1);
       }
 
       // guiControls.IterPerFrame = 1.0 / timePerIteration * 3600 / 60.0;
