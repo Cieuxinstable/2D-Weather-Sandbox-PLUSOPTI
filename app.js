@@ -11171,11 +11171,13 @@ var soundingGraph = {
             gl.drawBuffers([ gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2 ]);
 
             // ── Vent des centres d'action : simule une brosse qui drague ──
-            if (!leftMousePressed && acWindInjection.active && guiControls.actionCentersEnabled) {
+            if (!leftMousePressed && actionCenters.length > 0 && guiControls.actionCentersEnabled && i === 0) {
+              if (!window._acWindLogged) { console.log('AC WIND: injecting for', actionCenters.length, 'centers'); window._acWindLogged = true; }
               for (const _ac of actionCenters) {
                 const mv = _ac.moveSpeed !== undefined ? _ac.moveSpeed : 1.0;
-                if (mv === 0) continue;
-                const dirSign = (mv > 0 ? 1 : -1) * (_ac.type === 'L' ? 1.0 : -0.4);
+                // mv=0 → vent stationnaire faible quand même (sinon pas de vent du tout)
+                const effectiveMv = mv === 0 ? 0.5 : mv;
+                const dirSign = (effectiveMv > 0 ? 1 : -1) * (_ac.type === 'L' ? 1.0 : -0.4);
                 const altY    = (_ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
                 const ramp    = _ac.rampFactor !== undefined ? _ac.rampFactor : 1.0;
                 // intensité fixe forte pour bien déplacer l'air
