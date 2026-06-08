@@ -11083,39 +11083,6 @@ var soundingGraph = {
       }
       gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), inputType);
 
-      // ── Injection vent AC : inputType 8, bande Y + zone X ──────────────
-      if (!leftMousePressed && acWindInjection.active && guiControls.actionCentersEnabled) {
-        for (const _ac of actionCenters) {
-          const mv       = _ac.moveSpeed !== undefined ? _ac.moveSpeed : 1.0;
-          if (mv === 0) continue; // stationnaire = pas de vent
-
-          const acPosX   = guiControls.wrapHorizontally ? mod(_ac.x, 1.0) : clamp(_ac.x, 0.0, 1.0);
-          const altY     = (_ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
-          const intens   = 0.002 + ((_ac.intensity || 5) / 10.0) * 0.004;
-          const moveX    = (mv > 0 ? 1 : -1) * intens * 0.6 * (_ac.type === 'L' ? 1.0 : -0.4);
-          // radiusX en texCoord (0-1) : rayon horizontal de la dépression
-          // Convertir rayon de texCoord.y vers texCoord.x (sim_res_y/sim_res_x)
-          const radiusX  = _ac.radius * sim_res_y / Math.max(sim_res_x, 1);
-          // altBand : épaisseur de la bande de vent (20% de la hauteur sim)
-          const altBand  = 0.15;
-
-          gl.uniform4f(gl.getUniformLocation(advectionProgram, 'userInputValues'),
-            acPosX,   // x = centre X
-            altY,     // y = altitude cible
-            intens,   // z = intensity
-            altBand   // w = brushSize (hauteur de bande en texCoord.y)
-          );
-          // Passer radiusX via userInputMove.y (non utilisé)
-          gl.uniform2f(gl.getUniformLocation(advectionProgram, 'userInputMove'),
-            moveX,    // x = vitesse vent E/W
-            radiusX   // y = rayon X de la dépression
-          );
-          gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), 8);
-          gl.uniform1i(gl.getUniformLocation(advectionProgram, 'wrapHorizontally'), guiControls.wrapHorizontally);
-        }
-        gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), -1);
-      }
-
       // guiControls.IterPerFrame = 1.0 / timePerIteration * 3600 / 60.0;
 
 
@@ -11201,6 +11168,27 @@ var soundingGraph = {
             gl.bindTexture(gl.TEXTURE_2D, wallTexture_0);
             gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_1);
             gl.drawBuffers([ gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2 ]);
+
+            // ── Vent des centres d'action (injecté ici, DANS la boucle) ──
+            if (!leftMousePressed && acWindInjection.active && guiControls.actionCentersEnabled) {
+              for (const _ac of actionCenters) {
+                const mv = _ac.moveSpeed !== undefined ? _ac.moveSpeed : 1.0;
+                if (mv === 0) continue;
+                const acPosX  = guiControls.wrapHorizontally ? mod(_ac.x, 1.0) : clamp(_ac.x, 0.0, 1.0);
+                const altY    = (_ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
+                const intens  = 0.002 + ((_ac.intensity || 5) / 10.0) * 0.006;
+                const moveX   = (mv > 0 ? 1 : -1) * intens * (_ac.type === 'L' ? 1.0 : -0.4);
+                const radiusX = _ac.radius * sim_res_y / Math.max(sim_res_x, 1);
+                gl.uniform4f(gl.getUniformLocation(advectionProgram, 'userInputValues'), acPosX, altY, intens, 0.12);
+                gl.uniform2f(gl.getUniformLocation(advectionProgram, 'userInputMove'), moveX, radiusX);
+                gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), 8);
+                gl.uniform1i(gl.getUniformLocation(advectionProgram, 'wrapHorizontally'), guiControls.wrapHorizontally ? 1 : 0);
+                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+              }
+              // Remettre l'inputType du joueur pour le prochain draw
+              gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), inputType);
+            }
+
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
             // calc and apply pressure
