@@ -14,6 +14,7 @@ uniform isampler2D wallTex;
 uniform float dragMultiplier;
 
 uniform float wind;
+uniform float windMaxAlt; // 0.0-1.0 normalized height limit for wind injection
 
 uniform vec2 texelSize;
 // uniform vec2 resolution;
@@ -62,6 +63,8 @@ void main()
     // dragMultiplier; base[VY] -= base[VY] * base[VY] * base[VY] * base[VY] *
     // base[VY] * dragMultiplier;
 
-    base[VX] += wind * 0.000001;
+    // Apply wind only below windMaxAlt (basses couches)
+    float altFactor = windMaxAlt > 0.0 ? smoothstep(windMaxAlt, windMaxAlt * 0.5, texCoord.y) : 1.0;
+    base[VX] += wind * 0.000001 * altFactor;
   }
 }

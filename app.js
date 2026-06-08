@@ -5507,6 +5507,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.useProgram(velocityProgram);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'dragMultiplier'), guiControls.dragMultiplier);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'wind'), guiControls.wind);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'windMaxAlt'), 1.0);
     gl.useProgram(lightingProgram);
     gl.uniform1f(gl.getUniformLocation(lightingProgram, 'waterTemperature'), CtoK(guiControls.waterTemperature));
     gl.uniform1f(gl.getUniformLocation(lightingProgram, 'greenhouseGases'), guiControls.greenhouseGases);
@@ -5706,20 +5707,30 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     fluidParams_folder.add(guiControls, 'wind', -1.0, 1.0, 0.01)
       .onChange(function() {
         gl.useProgram(velocityProgram);
-        // Combine GUI wind + action centers wind contribution
+        // Wind from action centers — basses couches seulement (géré dans shader via uniform)
         let totalWind = guiControls.wind;
         if (guiControls.actionCentersEnabled) {
           for (const ac of actionCenters) {
-            const windStr = (ac.intensity / 10.0) * 0.15; // max 0.15 contribution
-            const dir = ac.dirEast ? 1 : -1;
-            // Low = flux d'ouest (vers est), High = flux inverse plus faible
+            const intensity  = ac.intensity  || 5;
+            const moveSpeed  = ac.moveSpeed  !== undefined ? ac.moveSpeed : 1.0;
+            const flux       = ac.flux       || 0.0; // -1=cold/N, +1=warm/S (pas d'impact sur vent E/W)
+            const windStr    = (intensity / 10.0) * 0.12;
+            const dir        = moveSpeed >= 0 ? 1 : -1;
             totalWind += ac.type === 'L'
               ? dir * windStr
-              : -dir * windStr * 0.4;
+              : -dir * windStr * 0.3;
           }
           totalWind = Math.max(-1.0, Math.min(1.0, totalWind));
         }
         gl.uniform1f(gl.getUniformLocation(velocityProgram, 'wind'), totalWind);
+
+        // Wind altitude cap uniform (basses couches)
+        let maxWindAltNorm = 0.25; // défaut 3000m / 12000m
+        if (guiControls.actionCentersEnabled && actionCenters.length > 0) {
+          const avgAlt = actionCenters.reduce((s, ac) => s + (ac.windAlt || 1500), 0) / actionCenters.length;
+          maxWindAltNorm = avgAlt / guiControls.simHeight;
+        }
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'windMaxAlt'), maxWindAltNorm);
       })
       .name('Wind');
 
@@ -6159,16 +6170,25 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     pressure_folder.add(guiControls, 'showActionCenters').name('Show H/L circles').listen();
     pressure_folder.add(guiControls, 'showIsobars').name('Show isobars').listen();
     pressure_folder.add({clearCenters: function() { actionCenters = []; }}, 'clearCenters').name('Clear all H/L');
-    pressure_folder.add({
-      editLast: function() {
-        if (actionCenters.length === 0) return;
-        const ac = actionCenters[actionCenters.length - 1];
-        const intStr = prompt('Intensity 1-10 for ' + ac.label + ' (current: ' + ac.intensity + '):', ac.intensity);
-        if (intStr !== null) ac.intensity = Math.max(1, Math.min(10, parseInt(intStr) || ac.intensity));
-        const dirStr = prompt('Direction E or W for ' + ac.label + ' (current: ' + (ac.dirEast ? 'E' : 'W') + '):', ac.dirEast ? 'E' : 'W');
-        if (dirStr !== null) ac.dirEast = dirStr.trim().toUpperCase() !== 'W';
-      }
-    }, 'editLast').name('Edit last H/L...');
+
+    // ── Sliders for last placed center ─────────────────────────────────────
+    guiControls.acIntensity  = 5;    // 1-10
+    guiControls.acFlux       = 0.0;  // -1 (cold/N) to +1 (warm/S)
+    guiControls.acMove       = 1.0;  // -5 (W) to +5 (E), 0=stationary
+    guiControls.acWindAlt    = 1500; // 500-3000m
+
+    pressure_folder.add(guiControls, 'acIntensity', 1, 10, 1)
+      .name('Intensity').listen()
+      .onChange(function() { applyACSliders(); });
+    pressure_folder.add(guiControls, 'acFlux', -1.0, 1.0, 0.1)
+      .name('Flux N(-1)→S(+1)').listen()
+      .onChange(function() { applyACSliders(); });
+    pressure_folder.add(guiControls, 'acMove', -5.0, 5.0, 0.5)
+      .name('Move W(-5)→E(+5)').listen()
+      .onChange(function() { applyACSliders(); });
+    pressure_folder.add(guiControls, 'acWindAlt', 500, 3000, 100)
+      .name('Wind max alt (m)').listen()
+      .onChange(function() { applyACSliders(); });
     soundings_folder.add(guiControls, 'showCAPE').name('Show CAPE').listen();
     soundings_folder.add(guiControls, 'showCIN').name('Show CIN').listen();
     soundings_folder.add(guiControls, 'showMLCAPE').name('Show MLCAPE').listen();
@@ -6256,7 +6276,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       })
       .listen();
 
-    datGui.width = 260;
+    datGui.width = 320;
   }
 
   function isRhohvMode(displayMode)
@@ -11029,6 +11049,12 @@ var soundingGraph = {
               corePressure : type === 'H' ? 1025 : 990, // hPa cœur
             };
             actionCenters.push(newAC);
+            // Auto-select newly placed center
+            selectedACIndex = actionCenters.length - 1;
+            guiControls.acIntensity = newAC.intensity;
+            guiControls.acFlux      = newAC.flux      || 0.0;
+            guiControls.acMove      = newAC.moveSpeed !== undefined ? newAC.moveSpeed : 1.0;
+            guiControls.acWindAlt   = newAC.windAlt   || 1500;
           }
           // Keep physics active while mouse held (brush effect)
           inputType = guiControls.tool == 'TOOL_ANTICYCLONE' ? 5 : 6;
@@ -12087,6 +12113,31 @@ var soundingGraph = {
   let actionCenterCtx    = null;
   let lastACUpdateTime   = 0;
 
+  // Index du centre sélectionné (dernier placé par défaut)
+  let selectedACIndex = -1;
+
+  function applyACSliders() {
+    const idx = selectedACIndex >= 0 && selectedACIndex < actionCenters.length
+      ? selectedACIndex
+      : actionCenters.length - 1;
+    if (idx < 0) return;
+    const ac = actionCenters[idx];
+    ac.intensity = guiControls.acIntensity;
+    ac.flux      = guiControls.acFlux;
+    ac.moveSpeed = guiControls.acMove;
+    ac.windAlt   = guiControls.acWindAlt;
+  }
+
+  function selectAC(idx) {
+    selectedACIndex = idx;
+    if (idx < 0 || idx >= actionCenters.length) return;
+    const ac = actionCenters[idx];
+    guiControls.acIntensity = ac.intensity || 5;
+    guiControls.acFlux      = ac.flux      || 0.0;
+    guiControls.acMove      = ac.moveSpeed !== undefined ? ac.moveSpeed : 1.0;
+    guiControls.acWindAlt   = ac.windAlt   || 1500;
+  }
+
   function initActionCenterCanvas() {
     if (actionCenterCanvas) return;
     actionCenterCanvas = document.createElement('canvas');
@@ -12103,16 +12154,22 @@ var soundingGraph = {
   function updateActionCenters(dt) {
     if (!guiControls.actionCentersEnabled) return;
     for (const ac of actionCenters) {
-      // Speed: intensity 1→10 maps to 0.00001→0.00008 sim units/ms
-      const baseSpeed = 0.00001 + (ac.intensity - 1) / 9 * 0.00007;
-      ac.speed = baseSpeed;
-      // Move east or west
-      const dir = ac.dirEast ? 1 : -1;
-      ac.x = mod(ac.x + dir * baseSpeed * dt, 1.0);
-      // Core pressure: H = 1025 + intensity*2, L = 990 - intensity*3
+      const intensity  = ac.intensity  || 5;
+      const moveSpeed  = ac.moveSpeed  !== undefined ? ac.moveSpeed : 1.0; // -5 to +5
+      const windAlt    = ac.windAlt    || 1500;
+
+      // Déplacement : moveSpeed en unités sim/s, 0 = stationnaire
+      const speedPerMs = Math.abs(moveSpeed) * 0.000008;
+      const dir        = moveSpeed >= 0 ? 1 : -1;
+      if (moveSpeed !== 0)
+        ac.x = mod(ac.x + dir * speedPerMs * dt, 1.0);
+
+      // Pression cœur
       ac.corePressure = ac.type === 'H'
-        ? 1025 + ac.intensity * 2
-        : 990  - ac.intensity * 3;
+        ? 1025 + intensity * 2
+        : 990  - intensity * 3;
+
+      ac.windAlt = windAlt;
     }
   }
 
@@ -12126,7 +12183,7 @@ var soundingGraph = {
     if (actionCenters.length === 0) return;
 
     const isobarStep  = 4;    // hPa entre chaque isobare
-    const isobarCount = 4;    // nombre d'isobares
+    const isobarCount = 2;    // nombre d'isobares
     const basePressure = 1013; // hPa environnement
 
     for (const ac of actionCenters) {
