@@ -11179,9 +11179,9 @@ var soundingGraph = {
               const dirSign = (effectiveMv > 0 ? 1 : -1) * (_ac.type === 'L' ? 1.0 : -0.4);
               const altY    = (_ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
               const ramp    = _ac.rampFactor !== undefined ? _ac.rampFactor : 1.0;
-              const intens  = 0.18;  // intensité brosse forte
-              const moveX   = dirSign * ((_ac.intensity || 5) / 10.0) * 0.20 * ramp;
-              const brushSz = _ac.radius * sim_res_y;  // rayon = taille dépression
+              const intens  = 0.6;   // intensité brosse très forte
+              const moveX   = dirSign * ((_ac.intensity || 5) / 10.0) * 0.6 * ramp;
+              const brushSz = _ac.radius * sim_res_y;
               const acPosX  = guiControls.wrapHorizontally ? mod(_ac.x, 1.0) : clamp(_ac.x, 0.0, 1.0);
               gl.uniform4f(gl.getUniformLocation(advectionProgram, 'userInputValues'),
                 acPosX, altY, intens, brushSz);
@@ -11193,7 +11193,6 @@ var soundingGraph = {
 
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-            // Restaurer inputType utilisateur après injection AC
             if (_acRestoreInput) {
               gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), inputType);
             }
