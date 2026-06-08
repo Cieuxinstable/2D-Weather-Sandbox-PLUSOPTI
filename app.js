@@ -11213,15 +11213,17 @@ var soundingGraph = {
               const dirSign = (effectiveMv > 0 ? 1 : -1) * (_ac.type === 'L' ? 1.0 : -0.4);
               const altY    = (_ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
               const ramp    = _ac.rampFactor !== undefined ? _ac.rampFactor : 1.0;
-              const intens  = 0.05;  // intensité brosse modérée
-              const moveX   = dirSign * ((_ac.intensity || 5) / 10.0) * 0.05 * ramp;
-              const brushSz = _ac.radius * sim_res_y;
+              const intens  = 0.08;  // intensité modérée
+              const moveX   = dirSign * ((_ac.intensity || 5) / 10.0) * 0.08 * ramp;
+              // Ellipse aplatie : large en X (toute la dépression), fine en Y (basses couches)
+              const radiusYtex = 0.06;  // épaisseur verticale fixe = basses couches (6% hauteur)
+              const radiusXtex = _ac.radius * sim_res_y / Math.max(sim_res_x, 1) * 1.2;
               const acPosX  = guiControls.wrapHorizontally ? mod(_ac.x, 1.0) : clamp(_ac.x, 0.0, 1.0);
               gl.uniform4f(gl.getUniformLocation(advectionProgram, 'userInputValues'),
-                acPosX, altY, intens, brushSz);
+                acPosX, altY, intens, radiusYtex);
               gl.uniform2f(gl.getUniformLocation(advectionProgram, 'userInputMove'),
-                moveX, 0.0);
-              gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), 4);
+                moveX, radiusXtex);
+              gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), 8);
               gl.uniform1i(gl.getUniformLocation(advectionProgram, 'wrapHorizontally'), guiControls.wrapHorizontally ? 1 : 0);
             }
 
