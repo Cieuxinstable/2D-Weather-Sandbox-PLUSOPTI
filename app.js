@@ -5776,6 +5776,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         'Vegetation' : 'TOOL_VEGETATION',
         'Snow' : 'TOOL_WALL_SNOW',
         'Wind' : 'TOOL_WIND',
+        'Wind brush' : 'TOOL_WIND_DIR',
+        'High (Anti.)' : 'TOOL_ANTICYCLONE',
+        'Low (Depr.)' : 'TOOL_DEPRESSION',
         'Weather Station' : 'TOOL_STATION',
         'Radar Tower' : 'TOOL_RADAR',
         'Sounding Probe' : 'TOOL_SOUNDING',
@@ -6229,7 +6232,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       })
       .listen();
 
-    datGui.width = 280;
+    datGui.width = 260;
   }
 
   function isRhohvMode(displayMode)
