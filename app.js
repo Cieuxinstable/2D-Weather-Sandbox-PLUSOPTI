@@ -51,6 +51,8 @@ function applyMapPreset(preset) {
   });
 }
 
+const _shaderVersion = Date.now(); // cache-bust shader fetches on every page load
+
 var FPS = 60.0;
 
 
@@ -11176,7 +11178,7 @@ var soundingGraph = {
               corePressure : type === 'H' ? 1025 : 990,
               rampFactor : 0.0,
               windAlt    : guiControls.acWindAlt || 1500,
-              tempEffect : type === 'H' ? 2.0 : -2.0,  // H warms, L cools by default
+              tempEffect : type === 'H' ? 0.0 : -2.0,
             };
             actionCenters.push(newAC);
             // Auto-select newly placed center
@@ -11259,14 +11261,14 @@ var soundingGraph = {
               const acPosX    = guiControls.wrapHorizontally ? mod(ac.x, 1.0) : clamp(ac.x, 0.0, 1.0);
               const windCeil  = (ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
               const radiusX   = ac.radius * sim_res_y / Math.max(sim_res_x, 1);
-              const tempFx    = ac.tempEffect !== undefined ? ac.tempEffect : (ac.type === 'H' ? 2.0 : -2.0);
-              // H = no directional wind (pressure gradient handles divergent flow naturally)
-              // L = directional wind following movement; stationary L (dir=0) also skips wind
-              const moveX = ac.type === 'L' ? dir : 0.0;
+              // H center: no wind injection, no temperature effect, no drying
+              const isH   = ac.type === 'H';
+              const tempFx = isH ? 0.0 : (ac.tempEffect !== undefined ? ac.tempEffect : -2.0);
+              const moveX  = isH ? 0.0 : dir;
               _acWindData[_acWindCount * 4 + 0] = acPosX;
               _acWindData[_acWindCount * 4 + 1] = windCeil;   // altitude ceiling (normalised)
-              _acWindData[_acWindCount * 4 + 2] = normIntens; // 0.0–1.0
-              _acWindData[_acWindCount * 4 + 3] = tempFx;     // °C-equiv: neg=cool, pos=warm
+              _acWindData[_acWindCount * 4 + 2] = isH ? 0.0 : normIntens; // H = 0 intensity
+              _acWindData[_acWindCount * 4 + 3] = tempFx;
               _acWindMoveX[_acWindCount] = moveX;
               _acWindRadX [_acWindCount] = radiusX;
               _acWindCount++;
@@ -12946,7 +12948,7 @@ var soundingGraph = {
   async function loadSourceFile(fileName)
   {
     try {
-      const response = await fetch(fileName);
+      const response = await fetch(fileName + '?v=' + _shaderVersion);
       if (response.ok)
         return await response.text();
       else if (response.status === 404)
