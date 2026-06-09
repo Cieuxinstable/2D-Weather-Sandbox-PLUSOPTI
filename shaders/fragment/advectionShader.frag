@@ -25,7 +25,6 @@ uniform vec4 userInputValues; // xpos    Ypos     intensity     Brush Size
 
 uniform vec2 userInputMove;  // moveX  moveY
 uniform int userInputType;   // 0 = nothing 	1 = temp ...
-uniform float acMoveDir;     // +1 = depression vers E, -1 vers W
 
 uniform vec4 airplaneValues; // xpos   Ypos   throttle   fire
 
@@ -330,30 +329,25 @@ void main()
         base.xy = mix(base.xy, targetVel, blendStr);
       }
 
-    } else if (userInputType == 8 && wall[DISTANCE] != 0) { // ACTION CENTER WIND (low levels)
-      float radiusY = userInputValues[BRUSH_SIZE];   // epaisseur verticale (fine)
-      float radiusX = userInputMove.y;               // rayon horizontal (large)
+    } else if (userInputType == 8 && wall[DISTANCE] != 0) { // ACTION CENTER WIND
+      // userInputValues: x=centerX, y=altY, z=intensity, w=radius (en texCoord.y)
+      // userInputMove: x=windSpeed (E/W), y=radiusX (rayon horizontal)
+      // Masque circulaire doux comme la brosse, mais centré sur la dépression
+      float radiusY = userInputValues[BRUSH_SIZE];   // rayon vertical
+      float radiusX = userInputMove.y;               // rayon horizontal
+      // Distance normalisée elliptique (cercle dans la dépression)
       float dx = absHorizontalDist(userInputValues.x, texCoord.x) / max(radiusX, 0.0001);
-      float dy = (texCoord.y - userInputValues.y) / max(radiusY, 0.0001);
+      float dy = (texCoord.y - userInputValues.y)               / max(radiusY, 0.0001);
       float ellipseDist = sqrt(dx*dx + dy*dy);
+      // Poids doux comme la brosse (smoothstep depuis le bord vers le centre)
       float w8 = smoothstep(1.0, 0.0, ellipseDist);
-      // Coupure stricte au-dessus de l'altitude (basses couches seulement)
+      // Coupure stricte au-dessus de l'altitude cible (basses couches seulement)
       if (texCoord.y > userInputValues.y + radiusY) w8 = 0.0;
-      // dx signe pour gradient avant/arriere
-      float rawDx = texCoord.x - userInputValues.x;
-      if (wrapHorizontally) {
-        if (rawDx > 0.5) rawDx -= 1.0;
-        if (rawDx < -0.5) rawDx += 1.0;
-      }
-      float alongAxis = clamp((rawDx / max(radiusX, 0.0001)) * acMoveDir, -1.0, 1.0);
-      float frontBackFactor = mix(0.6, 1.3, smoothstep(-1.0, 1.0, alongAxis));
-      w8 *= frontBackFactor;
+
       if (w8 > 0.001) {
         base.x += userInputMove.x * 5.0 * w8 * userInputValues[BRUSH_INTENSITY];
-        // Plafond de vitesse : limiter le vent AC pour ne pas saturer (~75 km/h)
-        // 0.02 en raw velocity ≈ vent réaliste fort selon la résolution
-        float maxAcWind = 0.018;
-        base.x = clamp(base.x, -maxAcWind, maxAcWind);
+        // Plafond ~75 km/h (0.15 raw avec cellHeight 40m, timePerIter 0.00008h)
+        base.x = clamp(base.x, -0.15, 0.15);
       }
 
     } else if (userInputType >= 10) {               // wall
