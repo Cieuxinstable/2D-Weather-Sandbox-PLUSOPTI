@@ -27,7 +27,7 @@ uniform float vorticity;
 uniform float waterEvaporation;
 uniform float landEvaporation;
 uniform float waterWeight;
-uniform vec4 initial_Tv[126];
+uniform vec4 initial_Tv[160];
 uniform bool allowCaves;
 
 float getInitialT(int y) { return initial_Tv[y / 4][y % 4]; }

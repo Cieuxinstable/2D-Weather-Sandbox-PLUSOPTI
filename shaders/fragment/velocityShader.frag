@@ -26,7 +26,7 @@ uniform float acWindRadX[8];   // horizontal radius of influence (sim-space)
 uniform vec2 texelSize;
 // uniform vec2 resolution;
 
-uniform vec4 initial_Tv[126];
+uniform vec4 initial_Tv[160];
 
 float getInitialT(int y) { return initial_Tv[y / 4][y % 4]; }
 

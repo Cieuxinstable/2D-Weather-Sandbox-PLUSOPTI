@@ -27,6 +27,30 @@ function updateSetupSliders()
   document.getElementById('simHeightShow').value = simHeight + ' m';
 }
 
+function applyMapPreset(preset) {
+  const presets = {
+    small:  { x: 1500, y: 200, h: 10000 },
+    medium: { x: 3000, y: 300, h: 12000 },
+    large:  { x: 12000, y: 600, h: 15000 },
+  };
+  const p = presets[preset];
+  if (!p) return;
+
+  document.getElementById('simResSelX').value  = p.x;
+  document.getElementById('simResSelY').value  = p.y;
+  document.getElementById('simHeightSel').value = p.h;
+  updateSetupSliders();
+
+  // Highlight selected preset button
+  document.querySelectorAll('.btn-preset').forEach(btn => btn.classList.remove('btn-preset-selected'));
+  const names = { small: 'presetSmall', medium: 'presetMedium', large: 'presetLarge' };
+  // use data attribute approach — find by onclick text
+  document.querySelectorAll('.btn-preset').forEach(btn => {
+    if (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes("'" + preset + "'"))
+      btn.classList.add('btn-preset-selected');
+  });
+}
+
 var FPS = 60.0;
 
 
@@ -6063,6 +6087,24 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     precipitation_folder.add(guiControls, 'inactiveDroplets', 0, NUM_DROPLETS).listen().name('Inactive Droplets');
 
+    // ── Lightning controls ──────────────────────────────────────────────
+    guiControls.lightningEnabled = true;
+    precipitation_folder.add(guiControls, 'lightningEnabled')
+      .name('Lightning Strikes')
+      .onChange(function() {
+        const rate = guiControls.lightningEnabled ? guiControls.lightningRate : 0.0;
+        gl.useProgram(realisticDisplayProgram);
+        gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningRate'), rate);
+      });
+    guiControls.lightningRate = 1.0;
+    precipitation_folder.add(guiControls, 'lightningRate', 0.0, 1.0, 0.05)
+      .name('Lightning Intensity')
+      .onChange(function() {
+        if (!guiControls.lightningEnabled) return;
+        gl.useProgram(realisticDisplayProgram);
+        gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningRate'), guiControls.lightningRate);
+      });
+
 
     var display_folder = datGui.addFolder('Display');
 
@@ -6091,7 +6133,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         'Differential Reflectivity (ZDR)' : 'DISP_ZDR',
         'VIL' : 'DISP_VIL',
         'VILD' : 'DISP_VILD',
-        'Echo Top Height (EHT)' : 'DISP_EHT'
+        'Echo Top Height (EHT)' : 'DISP_EHT',
+        'CAPE Map [J/kg]' : 'DISP_CAPE',
+        'CIN Map [J/kg]'  : 'DISP_CIN'
       })
       .name('Display Mode')
       .onChange(function() {
@@ -6103,13 +6147,6 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         }
       })
       .listen();
-    guiControls.lightningRate = 1.0;
-    display_folder.add(guiControls, 'lightningRate', 0.0, 1.0, 0.05)
-      .name('Lightning intensity (0=off)')
-      .onChange(function() {
-        gl.useProgram(realisticDisplayProgram);
-        gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningRate'), guiControls.lightningRate);
-      });
 
     display_folder.add(guiControls, 'exposure', EXPOSURE_MIN, EXPOSURE_MAX, 0.01)
       .onChange(function() {
@@ -10594,9 +10631,9 @@ var soundingGraph = {
 
   // generate sounding data for forcing in sim
 
-  var realWorldSounding_T = new Float32Array(504);   // sim_res_y + 1
-  var realWorldSounding_W = new Float32Array(504);   // sim_res_y + 1
-  var realWorldSounding_Vel = new Float32Array(504); // sim_res_y + 1
+  var realWorldSounding_T = new Float32Array(640);   // 160 vec4s, supports up to sim_res_y=636
+  var realWorldSounding_W = new Float32Array(640);
+  var realWorldSounding_Vel = new Float32Array(640);
   if (soundingData && soundingData.length > 10) {
     var soundingForSim = rawSoundingToSimSounding(soundingData, guiControls.simHeight, sim_res_y + 1);
 
@@ -10617,7 +10654,7 @@ var soundingGraph = {
 
   // generate Initial temperature profile
 
-  var initial_T = new Float32Array(504); // sim_res_y + 1
+  var initial_T = new Float32Array(640); // 160 vec4s, supports up to sim_res_y=636
 
   for (var y = 0; y < sim_res_y + 1; y++) {
     let altitude = y / (sim_res_y + 1) * guiControls.simHeight;
@@ -11617,7 +11654,9 @@ var soundingGraph = {
     const isRadarProductMode = !!getRadarProductIdForDisplayMode(guiControls.displayMode);
     const usePolarRadarRenderer = shouldUsePolarRadarRenderer(guiControls.displayMode);
     const overlayRadarProduct = isRadarProductMode && !getRadarProductBackground(guiControls.displayMode);
-    const displayModeEffective = overlayRadarProduct ? 'DISP_REAL' : guiControls.displayMode;
+    const _rawDisplayMode = overlayRadarProduct ? 'DISP_REAL' : guiControls.displayMode;
+    const isCapeOverlayMode = _rawDisplayMode === 'DISP_CAPE' || _rawDisplayMode === 'DISP_CIN';
+    const displayModeEffective = isCapeOverlayMode ? 'DISP_REAL' : _rawDisplayMode;
 
     gl.useProgram(realisticDisplayProgram);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null); // null is canvas
@@ -11747,7 +11786,7 @@ var soundingGraph = {
       gl.uniform4f(gl.getUniformLocation(realisticDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'Xmult'), horizontalDisplayMult);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'iterNum'), iterNum);
-      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningRate'), guiControls.lightningRate !== undefined ? guiControls.lightningRate : 1.0);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningRate'), guiControls.lightningEnabled === false ? 0.0 : (guiControls.lightningRate !== undefined ? guiControls.lightningRate : 1.0));
 
       // Don't display vectors when zoomed out because you would just see noise
       if (cam.curZoom / sim_res_x > 0.003) {
@@ -12233,6 +12272,7 @@ var soundingGraph = {
       : 'none';
   }
   drawActionCenters();
+  drawCapeOverlayIfActive();
 
   drawRadarRangeOverlay();
   for (i = 0; i < radarTowers.length; i++) {
@@ -12252,6 +12292,16 @@ var soundingGraph = {
   }
 
   //////////////////////////////////////////////////////// functions:
+
+  // ── CAPE / CIN overlay canvas ──────────────────────────────────────────
+  let capeCanvas = null;
+  let capeCtx    = null;
+  let capeColumnValues = null;
+  let cinColumnValues  = null;
+  let capeColumnXs     = null;
+  let lastCapeFrame    = -999;
+  const CAPE_RECOMPUTE_INTERVAL = 4;
+  const NUM_CAPE_SAMPLES = 80;
 
   // ── Action Centers overlay canvas ──────────────────────────────────────
   let actionCenterCanvas = null;
@@ -12288,6 +12338,211 @@ var soundingGraph = {
     guiControls.acWindAlt   = ac.windAlt   || 1500;
     guiControls.acTemp      = ac.tempEffect !== undefined ? ac.tempEffect : (ac.type === 'H' ? 2.0 : -2.0);
     guiControls.acLabel     = ac.label || '';
+  }
+
+  // ── CAPE / CIN overlay functions ───────────────────────────────────────
+  function initCapeCanvas() {
+    if (capeCanvas) return;
+    capeCanvas = document.createElement('canvas');
+    capeCanvas.style.position      = 'fixed';
+    capeCanvas.style.left          = '0px';
+    capeCanvas.style.top           = '0px';
+    capeCanvas.style.zIndex        = '2';
+    capeCanvas.style.pointerEvents = 'none';
+    document.body.appendChild(capeCanvas);
+    capeCtx = capeCanvas.getContext('2d');
+  }
+
+  function capeValueToRgba(v, mode) {
+    if (mode === 'DISP_CIN') {
+      if (v < 10)  return null;
+      if (v < 25)  return 'rgba(80,210,60,0.28)';
+      if (v < 50)  return 'rgba(200,230,0,0.36)';
+      if (v < 100) return 'rgba(255,140,0,0.44)';
+      if (v < 200) return 'rgba(255,40,0,0.52)';
+      if (v < 500) return 'rgba(180,0,0,0.60)';
+      return 'rgba(90,0,0,0.68)';
+    } else {
+      // CAPE color scale: ~0→7000 J/kg
+      if (v < 50)   return null;
+      if (v < 300)  return 'rgba(0,100,210,0.26)';
+      if (v < 500)  return 'rgba(0,190,230,0.34)';
+      if (v < 1000) return 'rgba(0,210,80,0.42)';
+      if (v < 1500) return 'rgba(160,230,0,0.48)';
+      if (v < 2000) return 'rgba(255,210,0,0.54)';
+      if (v < 2500) return 'rgba(255,140,0,0.58)';
+      if (v < 3000) return 'rgba(255,50,0,0.63)';
+      if (v < 4000) return 'rgba(220,0,0,0.68)';
+      if (v < 5000) return 'rgba(200,0,140,0.72)';
+      if (v < 6000) return 'rgba(255,120,255,0.76)';
+      return 'rgba(255,255,255,0.80)';
+    }
+  }
+
+  function computeCapeColumns() {
+    const step   = Math.max(1, Math.floor(sim_res_x / NUM_CAPE_SAMPLES));
+    const actualN = Math.ceil(sim_res_x / step);
+
+    if (!capeColumnValues || capeColumnValues.length !== actualN) {
+      capeColumnValues = new Float32Array(actualN);
+      cinColumnValues  = new Float32Array(actualN);
+      capeColumnXs     = new Int32Array(actualN);
+    }
+
+    const drylapsePerCell = ((-1.0 / sim_res_y) * guiControls.simHeight * guiControls.dryLapseRate) / 1000.0;
+    const cellH = guiControls.simHeight / sim_res_y;
+    const g = 9.81;
+    const minMeaningfulCape = 1.0;
+
+    const baseCol  = new Float32Array(4 * sim_res_y);
+    const waterCol = new Float32Array(4 * sim_res_y);
+    const wallCol  = new Int32Array(4 * sim_res_y);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_1);
+
+    for (let si = 0; si < actualN; si++) {
+      const x = Math.min(si * step, sim_res_x - 1);
+      capeColumnXs[si] = x;
+
+      gl.readBuffer(gl.COLOR_ATTACHMENT0);
+      gl.readPixels(x, 0, 1, sim_res_y, gl.RGBA, gl.FLOAT, baseCol);
+      gl.readBuffer(gl.COLOR_ATTACHMENT1);
+      gl.readPixels(x, 0, 1, sim_res_y, gl.RGBA, gl.FLOAT, waterCol);
+      gl.readBuffer(gl.COLOR_ATTACHMENT2);
+      gl.readPixels(x, 0, 1, sim_res_y, gl.RGBA_INTEGER, gl.INT, wallCol);
+
+      // Find surface level (first fluid cell from bottom)
+      let surfaceLevel = 0;
+      for (let y = 0; y < sim_res_y; y++) {
+        if (wallCol[4 * y + 1] !== 0) { surfaceLevel = y; break; }
+      }
+
+      // Surface parcel initial state
+      const surfTotalW = Math.max(waterCol[4 * surfaceLevel], 0.0);
+      const surfCloudW = Math.max(waterCol[4 * surfaceLevel + 1], 0.0);
+      const surfWater  = Math.max(surfTotalW - surfCloudW, 0.0);
+      const surfPotT   = baseCol[4 * surfaceLevel + 3];
+      const surfTk     = surfPotT - ((surfaceLevel / sim_res_y) * guiControls.simHeight * guiControls.dryLapseRate) / 1000.0;
+
+      let prevT       = surfTk;
+      let prevCloud   = Math.max(surfWater - maxWater(prevT), 0.0);
+      let localCape   = 0.0;
+      let localCin    = 0.0;
+      let posReached  = false;
+      let negAfterPos = 0;
+
+      for (let yy = surfaceLevel + 1; yy < sim_res_y; yy++) {
+        const dT        = drylapsePerCell;
+        const cloudLocal = Math.max(surfWater - maxWater(prevT + dT), 0.0);
+        const dWt       = (cloudLocal - prevCloud) * guiControls.evapHeat;
+        const actualChange = dT_saturated(dT, dWt);
+        const parcelTk  = prevT + actualChange;
+        prevT     = parcelTk;
+        prevCloud = Math.max(surfWater - maxWater(prevT), 0.0);
+
+        if (wallCol[4 * yy + 1] !== 0) {
+          const envTk = baseCol[4 * yy + 3] - ((yy / sim_res_y) * guiControls.simHeight * guiControls.dryLapseRate) / 1000.0;
+          const buoy  = (parcelTk - envTk) / envTk;
+          if (buoy > 0.0) {
+            posReached  = true;
+            negAfterPos = 0;
+            localCape  += buoy * g * cellH;
+          } else if (!posReached) {
+            localCin   += (-buoy) * g * cellH;
+          } else {
+            if (++negAfterPos >= 8) break;
+          }
+        }
+      }
+
+      capeColumnValues[si] = localCape;
+      cinColumnValues[si]  = localCape >= minMeaningfulCape ? localCin : 0.0;
+    }
+  }
+
+  function drawCapeOverlayIfActive() {
+    const activeMode = guiControls.displayMode;
+    if (activeMode !== 'DISP_CAPE' && activeMode !== 'DISP_CIN') {
+      if (capeCanvas) capeCanvas.style.display = 'none';
+      return;
+    }
+    if (SETUP_MODE) return;
+
+    initCapeCanvas();
+    capeCanvas.style.display = 'block';
+
+    const W = canvas.width;
+    const H = canvas.height;
+    if (capeCanvas.width !== W)  capeCanvas.width  = W;
+    if (capeCanvas.height !== H) capeCanvas.height = H;
+
+    // Recompute CAPE values periodically
+    if (frameNum - lastCapeFrame >= CAPE_RECOMPUTE_INTERVAL) {
+      computeCapeColumns();
+      lastCapeFrame = frameNum;
+    }
+
+    capeCtx.clearRect(0, 0, W, H);
+    if (!capeColumnValues || capeColumnValues.length === 0) return;
+
+    const values = activeMode === 'DISP_CIN' ? cinColumnValues : capeColumnValues;
+    const N = capeColumnValues.length;
+
+    // Draw colored vertical columns
+    for (let si = 0; si < N; si++) {
+      const color = capeValueToRgba(values[si], activeMode);
+      if (!color) continue;
+
+      const x0sim = capeColumnXs[si];
+      const x1sim = si < N - 1 ? capeColumnXs[si + 1] : sim_res_x;
+      const x0screen = simToScreenX(x0sim);
+      const x1screen = simToScreenX(x1sim);
+
+      if (x1screen < 0 || x0screen > W) continue;
+
+      capeCtx.fillStyle = color;
+      capeCtx.fillRect(Math.floor(x0screen), 0, Math.max(1, Math.ceil(x1screen - x0screen)), H);
+    }
+
+    // Legend
+    drawCapeLegendOnCtx(capeCtx, W, H, activeMode);
+  }
+
+  function drawCapeLegendOnCtx(ctx, W, H, mode) {
+    const isCin = mode === 'DISP_CIN';
+    const steps = isCin
+      ? [[0,'rgba(80,210,60,0.8)','0'],[25,'rgba(200,230,0,0.85)','25'],[50,'rgba(255,140,0,0.9)','50'],
+         [100,'rgba(255,40,0,0.9)','100'],[200,'rgba(180,0,0,0.9)','200'],[500,'rgba(90,0,0,0.9)','500+']]
+      : [[0,'rgba(0,100,210,0.85)','100'],[300,'rgba(0,190,230,0.85)','300'],[500,'rgba(0,210,80,0.85)','500'],
+         [1000,'rgba(255,210,0,0.85)','1000'],[1500,'rgba(255,140,0,0.85)','1500'],[2000,'rgba(255,50,0,0.85)','2000'],
+         [3000,'rgba(220,0,0,0.85)','3000'],[4000,'rgba(200,0,140,0.85)','4000'],[5000,'rgba(255,120,255,0.85)','5000'],
+         [6000,'rgba(255,255,255,0.85)','7000+']];
+
+    const title = isCin ? 'CIN (J/kg)' : 'CAPE (J/kg)';
+    const boxW  = 110;
+    const boxH  = steps.length * 22 + 34;
+    const lx    = 10;
+    const ly    = H - boxH - 10;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.60)';
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(lx, ly, boxW, boxH, 6) : ctx.rect(lx, ly, boxW, boxH);
+    ctx.fill();
+
+    ctx.font      = 'bold 13px sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'left';
+    ctx.fillText(title, lx + 8, ly + 18);
+
+    for (let i = 0; i < steps.length; i++) {
+      const [, color, label] = steps[i];
+      const rowY = ly + 32 + i * 22;
+      ctx.fillStyle = color;
+      ctx.fillRect(lx + 8, rowY - 10, 14, 14);
+      ctx.fillStyle = '#ddd';
+      ctx.font      = '11px sans-serif';
+      ctx.fillText(label, lx + 28, rowY);
+    }
   }
 
   function initActionCenterCanvas() {

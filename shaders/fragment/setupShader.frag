@@ -11,7 +11,7 @@ uniform float simHeight;
 uniform float seed;
 uniform float heightMult;
 
-uniform vec4 initial_Tv[126];
+uniform vec4 initial_Tv[160];
 
 float getInitialT(int y) { return initial_Tv[y / 4][y % 4]; }
 
