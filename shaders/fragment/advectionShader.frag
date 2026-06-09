@@ -25,7 +25,7 @@ uniform vec4 userInputValues; // xpos    Ypos     intensity     Brush Size
 
 uniform vec2 userInputMove;  // moveX  moveY
 uniform int userInputType;   // 0 = nothing 	1 = temp ...
-uniform float acMoveDir;     // direction de deplacement du centre d'action (+1 E, -1 W)
+uniform float acMoveDir;     // +1 = depression vers E, -1 vers W
 
 uniform vec4 airplaneValues; // xpos   Ypos   throttle   fire
 
@@ -331,32 +331,23 @@ void main()
       }
 
     } else if (userInputType == 8 && wall[DISTANCE] != 0) { // ACTION CENTER WIND (low levels)
-      // userInputValues: x=centerX, y=altY, z=intensity, w=radiusY (epaisseur verticale)
-      // userInputMove: x=windSpeed (E/W), y=radiusX (rayon horizontal)
-      // acMoveDir: +1 si depression va vers E, -1 vers W
       float radiusY = userInputValues[BRUSH_SIZE];   // epaisseur verticale (fine)
       float radiusX = userInputMove.y;               // rayon horizontal (large)
-      float signedDx = absHorizontalDist(userInputValues.x, texCoord.x);
-      // dx signe : positif a l'est du centre, negatif a l'ouest
-      float rawDx = texCoord.x - userInputValues.x;
-      if (wrapHorizontally) {
-        if (rawDx > 0.5) rawDx -= 1.0;
-        if (rawDx < -0.5) rawDx += 1.0;
-      }
-      float dx = signedDx / max(radiusX, 0.0001);
+      float dx = absHorizontalDist(userInputValues.x, texCoord.x) / max(radiusX, 0.0001);
       float dy = (texCoord.y - userInputValues.y) / max(radiusY, 0.0001);
       float ellipseDist = sqrt(dx*dx + dy*dy);
       float w8 = smoothstep(1.0, 0.0, ellipseDist);
       // Coupure stricte au-dessus de l'altitude (basses couches seulement)
       if (texCoord.y > userInputValues.y + radiusY) w8 = 0.0;
-
-      // Gradient avant/arriere : vent plus fort a l'avant (sens du deplacement)
-      // position relative le long de l'axe de deplacement, normalisee -1..+1
+      // dx signe pour gradient avant/arriere
+      float rawDx = texCoord.x - userInputValues.x;
+      if (wrapHorizontally) {
+        if (rawDx > 0.5) rawDx -= 1.0;
+        if (rawDx < -0.5) rawDx += 1.0;
+      }
       float alongAxis = clamp((rawDx / max(radiusX, 0.0001)) * acMoveDir, -1.0, 1.0);
-      // avant (alongAxis>0) = 1.3x, arriere (alongAxis<0) = 0.6x, transition douce
       float frontBackFactor = mix(0.6, 1.3, smoothstep(-1.0, 1.0, alongAxis));
       w8 *= frontBackFactor;
-
       if (w8 > 0.001) {
         base.x += userInputMove.x * 5.0 * w8 * userInputValues[BRUSH_INTENSITY];
       }
