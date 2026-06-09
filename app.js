@@ -1213,8 +1213,6 @@ const guiControls_default = {
   IterPerFrame : 6,
   auto_IterPerFrame : true,
   sound : true,
-  lightningEnabled : true,
-  lightningReduction : 0,
   showActionCenters : true,
   showIsobars : true,
   actionCentersEnabled : true,
@@ -2046,7 +2044,6 @@ class Weatherstation
   #dewpoint = 0;     // °C
   #relativeHumd = 0; // %
   #velocity = 0;     // ms
-  #precipRate = 0;   // mm/h intensite pluviometrique
   #soilMoisture = 0; // mm
   #snowHeight = 0;   // cm
   #airQuality = 0;   // AQI
@@ -2295,11 +2292,6 @@ class Weatherstation
       this.#relativeHumd = Math.min(this.#relativeHumd, 100.0);
     }
 
-    // Intensité pluviométrique (mm/h) depuis la précipitation dans l'air (channel PRECIPITATION=2)
-    // waterTextureValues[4 + 2] = précip à y-1. Calibration empirique → mm/h
-    let precipInAir = Math.max(0, waterTextureValues[4 + 2]);
-    this.#precipRate = precipInAir * 3600.0 * guiControls.fallSpeed * 50000.0;
-
 
     if (waterTextureValues[0] > 1000.5 && waterTextureValues[0] < 1001.5) { // on land surface
       this.#soilMoisture = waterTextureValues[2];
@@ -2451,13 +2443,6 @@ class Weatherstation
       c.font = '9px Arial';
       c.fillStyle = '#ffe066';
       c.fillText(label, 90, 28);
-    }
-
-    // Intensité pluviométrique en mm/h (affichée si pluie significative)
-    if (this.#precipRate > 0.1) {
-      c.font = 'bold 10px Arial';
-      c.fillStyle = '#4db8ff';
-      c.fillText('🌧 ' + this.#precipRate.toFixed(1) + ' mm/h', 70, 40);
     }
 
     // Position pointer
@@ -6026,8 +6011,6 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .name('Evaporation Rate');
 
     precipitation_folder.add(guiControls, 'inactiveDroplets', 0, NUM_DROPLETS).listen().name('Inactive Droplets');
-    precipitation_folder.add(guiControls, 'lightningEnabled').name('Foudre activee');
-    precipitation_folder.add(guiControls, 'lightningReduction', 0, 100, 5).name('Foudre reduction %');
 
 
     var display_folder = datGui.addFolder('Display');
@@ -6222,17 +6205,6 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     pressure_folder.add(guiControls, 'acWindAlt', 500, 3000, 100)
       .name('Wind alt (m)').listen()
       .onChange(function() { applyACSliders(); });
-    pressure_folder.add({renameAC: function() {
-      const idx = selectedACIndex >= 0 && selectedACIndex < actionCenters.length
-        ? selectedACIndex : actionCenters.length - 1;
-      if (idx < 0) { alert('Aucun centre sélectionné'); return; }
-      const ac = actionCenters[idx];
-      const newName = prompt('Nom du centre ' + ac.label + ' :', ac.label);
-      if (newName !== null && newName.trim() !== '') {
-        ac.label = newName.trim();
-        guiControls.acSelected = ac.label + ' (' + ac.type + ')';
-      }
-    }}, 'renameAC').name('Renommer le centre...');
     soundings_folder.add(guiControls, 'showCAPE').name('Show CAPE').listen();
     soundings_folder.add(guiControls, 'showCIN').name('Show CIN').listen();
     soundings_folder.add(guiControls, 'showMLCAPE').name('Show MLCAPE').listen();
@@ -11241,18 +11213,16 @@ var soundingGraph = {
               const dirSign = (effectiveMv > 0 ? 1 : -1) * (_ac.type === 'L' ? 1.0 : -0.4);
               const altY    = (_ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
               const ramp    = _ac.rampFactor !== undefined ? _ac.rampFactor : 1.0;
-              const intens  = 0.045; // intensité calibrée ~60-80 km/h à intensité 5
-              const moveX   = dirSign * ((_ac.intensity || 5) / 10.0) * 0.045 * ramp;
+              const intens  = 0.02;  // intensité réduite (~75 km/h à intensité 5)
+              const moveX   = dirSign * ((_ac.intensity || 5) / 10.0) * 0.02 * ramp;
               // Ellipse aplatie : large en X (toute la dépression), fine en Y (basses couches)
-              const radiusYtex = 0.06;  // épaisseur verticale = basses couches
-              const radiusXtex = _ac.radius * 1.2;  // rayon en texCoord.x (la dépression visible)
+              const radiusYtex = 0.06;  // épaisseur verticale fixe = basses couches (6% hauteur)
+              const radiusXtex = _ac.radius * sim_res_y / Math.max(sim_res_x, 1) * 1.2;
               const acPosX  = guiControls.wrapHorizontally ? mod(_ac.x, 1.0) : clamp(_ac.x, 0.0, 1.0);
-              const acDir = effectiveMv > 0 ? 1.0 : -1.0;
               gl.uniform4f(gl.getUniformLocation(advectionProgram, 'userInputValues'),
                 acPosX, altY, intens, radiusYtex);
               gl.uniform2f(gl.getUniformLocation(advectionProgram, 'userInputMove'),
                 moveX, radiusXtex);
-              gl.uniform1f(gl.getUniformLocation(advectionProgram, 'acMoveDir'), acDir);
               gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), 8);
               gl.uniform1i(gl.getUniformLocation(advectionProgram, 'wrapHorizontally'), guiControls.wrapHorizontally ? 1 : 0);
             }
@@ -11367,12 +11337,7 @@ var soundingGraph = {
               gl.bindVertexArray(fluidVao); // set screenfilling rect again
 
 
-              // Extract lightningLocation - desactivable + reduction
-              let _doLightning = guiControls.lightningEnabled;
-              if (_doLightning && guiControls.lightningReduction > 0) {
-                if (Math.random() * 100 < guiControls.lightningReduction) _doLightning = false;
-              }
-              if (_doLightning) {
+              // Extract lightningLocation from precipitationfeedback
               gl.useProgram(lightningLocationProgram);
               gl.uniform1f(gl.getUniformLocation(lightningLocationProgram, 'iterNum'), iterNum);
 
@@ -11393,7 +11358,6 @@ var soundingGraph = {
                   soundSystem.soundThunder(lightningDataValues[0], lightningDataValues[1], Math.pow(lightningDataValues[3], 2.0));
                 }
               }
-              } // fin if(_doLightning)
             }
 
             gl.useProgram(radarFieldUpdateProgram);
