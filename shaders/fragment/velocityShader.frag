@@ -85,16 +85,12 @@ void main()
 
       if (w > 0.001) {
         if (abs(acWindMoveX[ai]) > 0.001) {
-          // L center: gentle directional wind nudge (small blendStr avoids micro-oscillations)
+          // L center: inject directional wind
           float targetVX = acWindMoveX[ai] * 0.12 * acWindData[ai].z;
-          float blendStr = clamp(w * 0.008, 0.0, 0.08);
+          float blendStr = clamp(w * 0.05, 0.0, 0.5);
           base[VX] = mix(base[VX], targetVX, blendStr);
-        } else {
-          // H center: dampen winds toward calm (subsidence / high-pressure)
-          float dampStr = clamp(w * 0.02 * acWindData[ai].z, 0.0, 0.25);
-          base[VX] = mix(base[VX], 0.0, dampStr);
-          base[VY] = mix(base[VY], 0.0, dampStr * 0.5);
         }
+        // H center: no wind effect, only humidity drying (in advectionShader) + temperature
         // Temperature effect: acWindData.w > 0 = H (warming), < 0 = L (cooling)
         base[TEMPERATURE] += acWindData[ai].w * 0.0001 * w * acWindData[ai].z;
       }
