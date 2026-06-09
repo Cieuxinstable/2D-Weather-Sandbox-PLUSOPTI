@@ -356,6 +356,28 @@ void main()
         base.x = clamp(base.x, -0.15, 0.15);
       }
 
+    } else if (userInputType == 9 && wall[DISTANCE] != 0) { // CAPE brush — increase low-level instability
+      float dist9 = length(vec2(absHorizontalDist(userInputValues.x, texCoord.x), userInputValues.y - texCoord.y));
+      float w9 = smoothstep(userInputValues[BRUSH_SIZE] * texelSize.y, 0.0, dist9);
+      if (w9 > 0.001) {
+        // Add moisture to increase CAPE (more water vapor = more latent heat release on ascent)
+        water[TOTAL] += w9 * userInputValues[BRUSH_INTENSITY] * 0.15;
+        // Slight surface warming → stronger instability
+        if (texCoord.y < 0.2)
+          base[TEMPERATURE] += w9 * userInputValues[BRUSH_INTENSITY] * 0.003;
+      }
+
+    } else if (userInputType == 23 && wall[DISTANCE] != 0) { // CIN brush — create temperature inversion (cap)
+      float dist23 = length(vec2(absHorizontalDist(userInputValues.x, texCoord.x), userInputValues.y - texCoord.y));
+      float w23 = smoothstep(userInputValues[BRUSH_SIZE] * texelSize.y, 0.0, dist23);
+      if (w23 > 0.001) {
+        // Warm the cap layer — creates inversion that suppresses convection (CIN)
+        base[TEMPERATURE] += w23 * userInputValues[BRUSH_INTENSITY] * 0.012;
+        // Dry the cap (subsidence drying reinforces the capping inversion)
+        water[TOTAL] = max(water[TOTAL] - w23 * userInputValues[BRUSH_INTENSITY] * 0.03, 0.0);
+        water[CLOUD] = max(water[CLOUD] - w23 * userInputValues[BRUSH_INTENSITY] * 0.05, 0.0);
+      }
+
     } else if (userInputType >= 10) {               // wall
       if (userInputValues[BRUSH_INTENSITY] > 0.0) { // build wall if positive value else remove wall
 

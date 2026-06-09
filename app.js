@@ -3315,24 +3315,56 @@ class LoadingBar
     this.underBar = document.createElement('div');
     this.loadingBar.appendChild(this.underBar);
 
-    this.loadingBar.style.width = '100%';
-    this.loadingBar.style.height = '100px';
+    this.loadingBar.style.width = '460px';
+    this.loadingBar.style.maxWidth = '90vw';
+    this.loadingBar.style.borderRadius = '12px';
+    this.loadingBar.style.overflow = 'hidden';
     this.loadingBar.style.color = 'white';
-    this.loadingBar.style.textAlign = 'center';
-    this.loadingBar.style.lineHeight = '50px';
-    this.loadingBar.style.backgroundColor = 'gray';
-    this.loadingBar.style.marginTop = '400px';
-    this.loadingBar.style.position = 'absolute';
-    this.loadingBar.style.zIndex = '2';
+    this.loadingBar.style.position = 'fixed';
+    this.loadingBar.style.top = '50%';
+    this.loadingBar.style.left = '50%';
+    this.loadingBar.style.transform = 'translate(-50%, -50%)';
+    this.loadingBar.style.zIndex = '999';
+    this.loadingBar.style.boxShadow = '0 8px 32px rgba(0,0,0,0.6)';
+    this.loadingBar.style.background = 'rgba(20,20,30,0.97)';
+    this.loadingBar.style.padding = '18px 20px 14px';
+    this.loadingBar.style.transition = 'opacity 0.5s ease';
+    this.loadingBar.style.overflow = 'visible'; // allow border-radius without clipping children
 
     this.underBar.style.width = '100%';
-    this.underBar.style.height = '50px';
-    this.underBar.style.backgroundColor = 'black';
+    this.underBar.style.height = '20px';
+    this.underBar.style.color = '#aaa';
+    this.underBar.style.fontSize = '12px';
+    this.underBar.style.marginTop = '8px';
+    this.underBar.style.textAlign = 'center';
+    this.underBar.style.whiteSpace = 'nowrap';
+    this.underBar.style.overflow = 'hidden';
+    this.underBar.style.textOverflow = 'ellipsis';
+    // Track container (grey background)
+    const trackEl = document.createElement('div');
+    trackEl.style.width = '100%';
+    trackEl.style.height = '18px';
+    trackEl.style.backgroundColor = 'rgba(255,255,255,0.10)';
+    trackEl.style.borderRadius = '9px';
+    trackEl.style.overflow = 'hidden';
+    const titleEl = document.createElement('div');
+    titleEl.style.cssText = 'font-size:14px;font-weight:bold;color:#eee;text-align:center;margin-bottom:12px;letter-spacing:0.05em';
+    titleEl.textContent = '2D Weather Sandbox';
+    this.loadingBar.insertBefore(titleEl, this.underBar);
+    this.loadingBar.insertBefore(trackEl, this.underBar);
+    trackEl.appendChild(this.bar);
 
-    this.bar.style.height = '50px';
-
-    this.bar.style.backgroundColor = 'green';
-    this.bar.style.fontSize = '20px';
+    this.bar.style.height = '18px';
+    this.bar.style.background = 'linear-gradient(90deg,#27ae60,#2ecc71)';
+    this.bar.style.borderRadius = '9px';
+    this.bar.style.fontSize = '11px';
+    this.bar.style.lineHeight = '18px';
+    this.bar.style.textAlign = 'right';
+    this.bar.style.paddingRight = '6px';
+    this.bar.style.color = '#fff';
+    this.bar.style.fontWeight = 'bold';
+    this.bar.style.transition = 'width 0.25s ease';
+    this.bar.style.boxSizing = 'border-box';
 
     this.#update();
 
@@ -3363,19 +3395,21 @@ class LoadingBar
   #update()
   {
     return new Promise((resolve) => {
-      this.bar.style.width = this.percent + '%';
-      this.bar.innerHTML = this.percent + '%';
-      this.underBar.innerHTML = this.description;
-      let timeout;
-      if (this.percent == 100)
-        timeout = 5;
-      else
-        timeout = 5; // 50 for nicer feel
-      setTimeout(() => { resolve(); }, timeout);
+      const displayPct = Math.min(Math.round(this.percent), 100);
+      this.bar.style.width = displayPct + '%';
+      this.bar.innerHTML = displayPct + '%';
+      this.underBar.innerHTML = this.description || '';
+      setTimeout(() => { resolve(); }, displayPct >= 100 ? 250 : 5);
     });
   }
 
-  remove() { this.loadingBar.parentNode.removeChild(this.loadingBar); }
+  remove() {
+    this.loadingBar.style.opacity = '0';
+    setTimeout(() => {
+      if (this.loadingBar.parentNode)
+        this.loadingBar.parentNode.removeChild(this.loadingBar);
+    }, 520);
+  }
 }
 
 
@@ -5794,6 +5828,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
         'H (Anti.)' : 'TOOL_ANTICYCLONE',
         'L (Dep.)' : 'TOOL_DEPRESSION',
+        'CAPE brush [P]' : 'TOOL_CAPE',
+        'CIN brush [N]' : 'TOOL_CIN',
         'Weather Station' : 'TOOL_STATION',
         'Radar Tower' : 'TOOL_RADAR',
         'Sounding Probe' : 'TOOL_SOUNDING',
@@ -5845,14 +5881,6 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     pressure_folder.add(guiControls, 'acTemp', -5, 5, 0.5)
       .name('Temp effect (°C)').listen()
       .onChange(function() { applyACSliders(); });
-
-    guiControls.lightningRate = 1.0;
-    pressure_folder.add(guiControls, 'lightningRate', 0.0, 1.0, 0.05)
-      .name('Lightning intensity')
-      .onChange(function() {
-        gl.useProgram(realisticDisplayProgram);
-        gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningRate'), guiControls.lightningRate);
-      });
 
     var radiation_folder = datGui.addFolder('Radiation');
 
@@ -6075,6 +6103,14 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         }
       })
       .listen();
+    guiControls.lightningRate = 1.0;
+    display_folder.add(guiControls, 'lightningRate', 0.0, 1.0, 0.05)
+      .name('Lightning intensity (0=off)')
+      .onChange(function() {
+        gl.useProgram(realisticDisplayProgram);
+        gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningRate'), guiControls.lightningRate);
+      });
+
     display_folder.add(guiControls, 'exposure', EXPOSURE_MIN, EXPOSURE_MAX, 0.01)
       .onChange(function() {
         gl.useProgram(postProcessingProgram);
@@ -9084,6 +9120,24 @@ var soundingGraph = {
       guiControls.displayMode = 'DISP_AIRQUALITY';
     } else if (event.code == 'KeyC') {
       guiControls.displayMode = 'DISP_HUMD';
+    } else if (event.code == 'KeyP') {
+      // P: toggle CAPE brush / CAPE display on sounding
+      if (guiControls.tool === 'TOOL_CAPE') {
+        guiControls.tool = 'TOOL_NONE';
+      } else {
+        guiControls.tool = 'TOOL_CAPE';
+        if (!guiControls.showGraph) { guiControls.showGraph = true; hideOrShowGraph(); }
+        guiControls.showCAPE = true;
+      }
+    } else if (event.code === 'KeyN') {
+      // N: toggle CIN brush / CIN display on sounding
+      if (guiControls.tool === 'TOOL_CIN') {
+        guiControls.tool = 'TOOL_NONE';
+      } else {
+        guiControls.tool = 'TOOL_CIN';
+        if (!guiControls.showGraph) { guiControls.showGraph = true; hideOrShowGraph(); }
+        guiControls.showCIN = true;
+      }
     } else if (event.key == 'ArrowLeft') {
       leftPressed = true; // <
     } else if (event.key == 'ArrowUp') {
@@ -11043,6 +11097,16 @@ var soundingGraph = {
           inputType = 21;
         else if (guiControls.tool == 'TOOL_VEGETATION')
           inputType = 22;
+        else if (guiControls.tool == 'TOOL_CAPE') {
+          inputType = 9; // CAPE brush: add moisture + surface warmth
+          if (!guiControls.showGraph) { guiControls.showGraph = true; hideOrShowGraph(); }
+          guiControls.showCAPE = true;
+        }
+        else if (guiControls.tool == 'TOOL_CIN') {
+          inputType = 23; // CIN brush: create temperature inversion
+          if (!guiControls.showGraph) { guiControls.showGraph = true; hideOrShowGraph(); }
+          guiControls.showCIN = true;
+        }
         else if (guiControls.tool == 'TOOL_SOUNDING') {
           // activate probe and skip writing to simulation fields
           soundingProbeActive = true;
@@ -12378,6 +12442,13 @@ var soundingGraph = {
         actionCenterCtx.textAlign    = 'center';
         actionCenterCtx.textBaseline = 'middle';
         actionCenterCtx.fillText(ac.type, scrX, scrY);
+
+        // Nom personnalisé au-dessus de la lettre
+        const nameLabel = ac.label || (ac.type + (actionCenters.indexOf(ac) + 1));
+        const nameLabelFs = Math.max(11, Math.min(fontSize * 0.32, 18));
+        actionCenterCtx.font      = 'bold ' + nameLabelFs + 'px monospace';
+        actionCenterCtx.fillStyle = col + '0.92)';
+        actionCenterCtx.fillText(nameLabel, scrX, scrY - fontSize * 0.60);
 
         // Indicateur sélection (anneau blanc)
         const acIdx = actionCenters.indexOf(ac);
