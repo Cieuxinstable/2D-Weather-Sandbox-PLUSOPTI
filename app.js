@@ -11245,7 +11245,7 @@ var soundingGraph = {
               const moveX   = dirSign * ((_ac.intensity || 5) / 10.0) * 0.045 * ramp;
               // Ellipse aplatie : large en X (toute la dépression), fine en Y (basses couches)
               const radiusYtex = 0.06;  // épaisseur verticale = basses couches
-              const radiusXtex = _ac.radius * sim_res_y / Math.max(sim_res_x, 1) * 1.2;
+              const radiusXtex = _ac.radius * 1.2;  // rayon en texCoord.x (la dépression visible)
               const acPosX  = guiControls.wrapHorizontally ? mod(_ac.x, 1.0) : clamp(_ac.x, 0.0, 1.0);
               const acDir = effectiveMv > 0 ? 1.0 : -1.0;
               gl.uniform4f(gl.getUniformLocation(advectionProgram, 'userInputValues'),
