@@ -531,6 +531,22 @@ void main()
   //   base[TEMPERATURE] += planeInfluence * 74.0; // heat
 
 
+  // H center: dry moisture and cloud water in its influence zone
+  for (int ai = 0; ai < acWindCount; ai++) {
+    if (abs(acWindMoveX[ai]) < 0.001 && wall[DISTANCE] != 0) {
+      float ceiling = acWindData[ai].y;
+      float hDist   = absHorizontalDist(acWindData[ai].x, texCoord.x) / max(acWindRadX[ai], 0.0001);
+      float hWeight = smoothstep(1.0, 0.0, hDist);
+      float altFact = ceiling > 0.001 ? smoothstep(ceiling, ceiling * 0.15, texCoord.y) : 1.0;
+      float w       = hWeight * altFact;
+      if (w > 0.001) {
+        float dryStr  = acWindData[ai].z * w * 0.0001;
+        water[TOTAL]  = max(water[TOTAL]  - dryStr,       0.0);
+        water[CLOUD]  = max(water[CLOUD]  - dryStr * 3.0, 0.0);
+      }
+    }
+  }
+
   if (airplaneValues[3] > 0.9) { // PLANE CRASH!
 
     if (distFromPlane < 1.5) {

@@ -11178,7 +11178,7 @@ var soundingGraph = {
               corePressure : type === 'H' ? 1025 : 990,
               rampFactor : 0.0,
               windAlt    : guiControls.acWindAlt || 1500,
-              tempEffect : type === 'H' ? 0.0 : -2.0,
+              tempEffect : type === 'H' ? 2.0 : -2.0,
             };
             actionCenters.push(newAC);
             // Auto-select newly placed center
@@ -11261,13 +11261,13 @@ var soundingGraph = {
               const acPosX    = guiControls.wrapHorizontally ? mod(ac.x, 1.0) : clamp(ac.x, 0.0, 1.0);
               const windCeil  = (ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
               const radiusX   = ac.radius * sim_res_y / Math.max(sim_res_x, 1);
-              // H center: no wind injection, no temperature effect, no drying
-              const isH   = ac.type === 'H';
-              const tempFx = isH ? 0.0 : (ac.tempEffect !== undefined ? ac.tempEffect : -2.0);
-              const moveX  = isH ? 0.0 : dir;
+              // H = 0 moveX (no directional wind, but does damp/dry/warm via shader)
+              // L = ±1 moveX (directional wind)
+              const moveX  = ac.type === 'L' ? dir : 0.0;
+              const tempFx = ac.tempEffect !== undefined ? ac.tempEffect : (ac.type === 'H' ? 2.0 : -2.0);
               _acWindData[_acWindCount * 4 + 0] = acPosX;
-              _acWindData[_acWindCount * 4 + 1] = windCeil;   // altitude ceiling (normalised)
-              _acWindData[_acWindCount * 4 + 2] = isH ? 0.0 : normIntens; // H = 0 intensity
+              _acWindData[_acWindCount * 4 + 1] = windCeil;
+              _acWindData[_acWindCount * 4 + 2] = normIntens;
               _acWindData[_acWindCount * 4 + 3] = tempFx;
               _acWindMoveX[_acWindCount] = moveX;
               _acWindRadX [_acWindCount] = radiusX;
