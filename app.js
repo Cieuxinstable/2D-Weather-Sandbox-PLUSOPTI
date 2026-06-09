@@ -5987,7 +5987,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'evapHeat'), guiControls.evapHeat);
       })
-      .name('Evaporation Heat');
+      .name('CAPE');
     water_folder.add(guiControls, 'meltingHeat', 0.0, 5.0, 0.1)
       .onChange(function() {
         gl.useProgram(advectionProgram);

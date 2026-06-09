@@ -83,19 +83,12 @@ void main()
       float altFact = ceiling > 0.001 ? smoothstep(ceiling, ceiling * 0.15, texCoord.y) : 1.0;
       float w       = hWeight * altFact;
 
-      if (w > 0.001) {
-        // Directional wind: L only (acWindMoveX != 0). H = 0, no forced wind.
-        if (abs(acWindMoveX[ai]) > 0.001) {
-          float targetVX = acWindMoveX[ai] * 0.12 * acWindData[ai].z;
-          float blendStr = clamp(w * 0.05, 0.0, 0.5);
-          base[VX] = mix(base[VX], targetVX, blendStr);
-        } else {
-          // H center: gently damp existing winds toward calm (subsidence)
-          float dampStr = clamp(w * 0.008 * acWindData[ai].z, 0.0, 0.12);
-          base[VX] = mix(base[VX], 0.0, dampStr);
-          base[VY] = mix(base[VY], 0.0, dampStr * 0.4);
-        }
-        // Temperature effect: acWindData.w < 0 = cooling (L), > 0 = warming (H)
+      if (w > 0.001 && abs(acWindMoveX[ai]) > 0.001) {
+        // L center only: directional wind injection
+        float targetVX = acWindMoveX[ai] * 0.12 * acWindData[ai].z;
+        float blendStr = clamp(w * 0.05, 0.0, 0.5);
+        base[VX] = mix(base[VX], targetVX, blendStr);
+        // Temperature effect for L center
         base[TEMPERATURE] += acWindData[ai].w * 0.0001 * w * acWindData[ai].z;
       }
     }
