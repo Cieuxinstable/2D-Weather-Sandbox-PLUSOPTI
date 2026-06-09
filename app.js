@@ -6092,15 +6092,18 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     // ── Lightning controls ──────────────────────────────────────────────
     guiControls.lightningEnabled = true;
     precipitation_folder.add(guiControls, 'lightningEnabled')
-      .name('Lightning Strikes')
+      .name('Activer la foudre')
       .onChange(function() {
-        const rate = guiControls.lightningEnabled ? guiControls.lightningRate : 0.0;
+        const enabled = guiControls.lightningEnabled ? 1.0 : 0.0;
+        const rate    = guiControls.lightningEnabled ? guiControls.lightningRate : 0.0;
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningEnabled'), enabled);
         gl.useProgram(realisticDisplayProgram);
         gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningRate'), rate);
       });
     guiControls.lightningRate = 1.0;
     precipitation_folder.add(guiControls, 'lightningRate', 0.0, 1.0, 0.05)
-      .name('Lightning Intensity')
+      .name('Intensité foudre')
       .onChange(function() {
         if (!guiControls.lightningEnabled) return;
         gl.useProgram(realisticDisplayProgram);
@@ -10894,6 +10897,7 @@ var soundingGraph = {
   gl.uniform2f(gl.getUniformLocation(precipitationProgram, 'resolution'), sim_res_x, sim_res_y);
   gl.uniform2f(gl.getUniformLocation(precipitationProgram, 'texelSize'), texelSizeX, texelSizeY);
   gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'dryLapse'), dryLapse);
+  gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningEnabled'), 1.0);
   gl.useProgram(IRtempDisplayProgram);
   gl.uniform2f(gl.getUniformLocation(IRtempDisplayProgram, 'resolution'), sim_res_x, sim_res_y);
   gl.uniform2f(gl.getUniformLocation(IRtempDisplayProgram, 'texelSize'), texelSizeX, texelSizeY);
@@ -11453,24 +11457,25 @@ var soundingGraph = {
 
 
               // Extract lightningLocation from precipitationfeedback
-              gl.useProgram(lightningLocationProgram);
-              gl.uniform1f(gl.getUniformLocation(lightningLocationProgram, 'iterNum'), iterNum);
+              if (guiControls.lightningEnabled !== false) {
+                gl.useProgram(lightningLocationProgram);
+                gl.uniform1f(gl.getUniformLocation(lightningLocationProgram, 'iterNum'), iterNum);
 
-              gl.activeTexture(gl.TEXTURE0);
-              gl.bindTexture(gl.TEXTURE_2D, precipitationFeedbackTexture);
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, precipitationFeedbackTexture);
 
-              gl.bindFramebuffer(gl.FRAMEBUFFER, lightningDataFrameBuff);
-              gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
-              gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+                gl.bindFramebuffer(gl.FRAMEBUFFER, lightningDataFrameBuff);
+                gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
+                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-              if (guiControls.sound) {
-                gl.readBuffer(gl.COLOR_ATTACHMENT0);
-                var lightningDataValues = new Float32Array(4);
-                gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, lightningDataValues);
-                // console.log('lightningDataValues: ', lightningDataValues[0], lightningDataValues[1], lightningDataValues[2], iterNum, lightningDataValues[3]);
+                if (guiControls.sound) {
+                  gl.readBuffer(gl.COLOR_ATTACHMENT0);
+                  var lightningDataValues = new Float32Array(4);
+                  gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, lightningDataValues);
 
-                if (Math.round(lightningDataValues[2]) == iterNum) {
-                  soundSystem.soundThunder(lightningDataValues[0], lightningDataValues[1], Math.pow(lightningDataValues[3], 2.0));
+                  if (Math.round(lightningDataValues[2]) == iterNum) {
+                    soundSystem.soundThunder(lightningDataValues[0], lightningDataValues[1], Math.pow(lightningDataValues[3], 2.0));
+                  }
                 }
               }
             }
