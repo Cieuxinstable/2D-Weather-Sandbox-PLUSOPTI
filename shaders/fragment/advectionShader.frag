@@ -350,6 +350,10 @@ void main()
       w8 *= frontBackFactor;
       if (w8 > 0.001) {
         base.x += userInputMove.x * 5.0 * w8 * userInputValues[BRUSH_INTENSITY];
+        // Plafond de vitesse : limiter le vent AC pour ne pas saturer (~75 km/h)
+        // 0.02 en raw velocity ≈ vent réaliste fort selon la résolution
+        float maxAcWind = 0.018;
+        base.x = clamp(base.x, -maxAcWind, maxAcWind);
       }
 
     } else if (userInputType >= 10) {               // wall

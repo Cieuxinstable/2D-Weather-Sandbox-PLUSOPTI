@@ -2046,7 +2046,9 @@ class Weatherstation
   #dewpoint = 0;     // °C
   #relativeHumd = 0; // %
   #velocity = 0;     // ms
-  #precipRate = 0;   // mm/min
+  #precipRate = 0;        // mm/min
+  #lastSoilMoisture = -1; // mm, pour calculer la variation
+  #lastPrecipTime = 0;    // timestamp ms
   #soilMoisture = 0; // mm
   #snowHeight = 0;   // cm
   #airQuality = 0;   // AQI
@@ -2290,9 +2292,6 @@ class Weatherstation
     }
 
     this.#relativeHumd = relativeHumd(T, waterTextureValues[4 + 0]);
-    // Intensité pluviométrique mm/min : précipitation dans l'air (channel 2)
-    let precipInAir = Math.max(0, waterTextureValues[4 + 2]);
-    this.#precipRate = precipInAir * 60.0 * guiControls.fallSpeed * 50000.0;
 
     if (guiControls.realDewPoint) {
       this.#relativeHumd = Math.min(this.#relativeHumd, 100.0);
@@ -2302,6 +2301,22 @@ class Weatherstation
     if (waterTextureValues[0] > 1000.5 && waterTextureValues[0] < 1001.5) { // on land surface
       this.#soilMoisture = waterTextureValues[2];
       this.#snowHeight = waterTextureValues[3];
+
+      // Intensité pluviométrique mm/min = variation du cumul (soilMoisture)
+      const nowMs = (performance.now ? performance.now() : Date.now());
+      if (this.#lastSoilMoisture >= 0 && this.#lastPrecipTime > 0) {
+        const dtMin = (nowMs - this.#lastPrecipTime) / 60000.0; // ms → minutes réelles
+        if (dtMin > 0.001) {
+          const dMoist = this.#soilMoisture - this.#lastSoilMoisture;
+          // Seule l'augmentation = pluie (l'évaporation diminue, on l'ignore)
+          // Conversion temps sim : 1 min réelle ≈ plusieurs min sim, on lisse
+          let rate = dMoist > 0 ? dMoist / dtMin : 0;
+          // Lissage exponentiel pour éviter les à-coups
+          this.#precipRate = this.#precipRate * 0.7 + rate * 0.3;
+        }
+      }
+      this.#lastSoilMoisture = this.#soilMoisture;
+      this.#lastPrecipTime = nowMs;
 
       if (!this.#isOnLand) {
         this.clearChart();
@@ -2322,6 +2337,8 @@ class Weatherstation
         this.#historyChart.data.datasets[6].reallyHidden = false;
       }
     } else { // in air
+      this.#precipRate = 0;          // pas de pluie mesurable en altitude
+      this.#lastSoilMoisture = -1;
       if (this.#isOnLand || this.#isOnWater) {
         this.clearChart();
         this.#isOnLand = false;
@@ -11238,8 +11255,8 @@ var soundingGraph = {
               const dirSign = (effectiveMv > 0 ? 1 : -1) * (_ac.type === 'L' ? 1.0 : -0.4);
               const altY    = (_ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
               const ramp    = _ac.rampFactor !== undefined ? _ac.rampFactor : 1.0;
-              const intens  = 0.035; // intensité réduite
-              const moveX   = dirSign * ((_ac.intensity || 5) / 10.0) * 0.035 * ramp;
+              const intens  = 0.05;  // intensité qui génère le vent (plafonné dans le shader)
+              const moveX   = dirSign * ((_ac.intensity || 5) / 10.0) * 0.05 * ramp;
               // Ellipse aplatie : large en X (toute la dépression), fine en Y (basses couches)
               const radiusYtex = 0.06;  // épaisseur verticale fixe = basses couches (6% hauteur)
               const radiusXtex = _ac.radius * sim_res_y / Math.max(sim_res_x, 1) * 1.2;
