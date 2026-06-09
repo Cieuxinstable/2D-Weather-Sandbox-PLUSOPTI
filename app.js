@@ -11238,8 +11238,8 @@ var soundingGraph = {
               const dirSign = (effectiveMv > 0 ? 1 : -1) * (_ac.type === 'L' ? 1.0 : -0.4);
               const altY    = (_ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
               const ramp    = _ac.rampFactor !== undefined ? _ac.rampFactor : 1.0;
-              const intens  = 0.05;  // intensité réduite
-              const moveX   = dirSign * ((_ac.intensity || 5) / 10.0) * 0.05 * ramp;
+              const intens  = 0.035; // intensité réduite
+              const moveX   = dirSign * ((_ac.intensity || 5) / 10.0) * 0.035 * ramp;
               // Ellipse aplatie : large en X (toute la dépression), fine en Y (basses couches)
               const radiusYtex = 0.06;  // épaisseur verticale fixe = basses couches (6% hauteur)
               const radiusXtex = _ac.radius * sim_res_y / Math.max(sim_res_x, 1) * 1.2;
