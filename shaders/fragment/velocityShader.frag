@@ -16,11 +16,12 @@ uniform float dragMultiplier;
 uniform float wind;
 uniform float windMaxAlt; // 0.0-1.0 normalized height limit for wind injection
 
-// Action center wind injection (up to 8 centers)
+// Action center wind/temp injection (up to 8 centers)
+// acWindData: x=centerX, y=windCeiling(norm 0-1), z=normIntens(0-1), w=tempEffect
 uniform int   acWindCount;
-uniform vec4  acWindData[8];   // x=centerX, y=altY, z=intensity*ramp, w=radiusY
-uniform float acWindMoveX[8];  // signed wind speed (E+/W-), 0 = stationary
-uniform float acWindRadX[8];   // horizontal radius (ellipse, sim-space units)
+uniform vec4  acWindData[8];
+uniform float acWindMoveX[8];  // ±1 for L direction, 0 for H (no directional wind)
+uniform float acWindRadX[8];   // horizontal radius of influence (sim-space)
 
 uniform vec2 texelSize;
 // uniform vec2 resolution;
@@ -73,21 +74,24 @@ void main()
     float altFactor = windMaxAlt > 0.0 ? smoothstep(windMaxAlt, windMaxAlt * 0.5, texCoord.y) : 1.0;
     base[VX] += wind * 0.000001 * altFactor;
 
-    // Action center wind: blend toward target speed proportional to intensity
+    // Action center wind + temperature effect
     for (int ai = 0; ai < acWindCount; ai++) {
-      float radY  = acWindData[ai].w;
-      float radX  = max(acWindRadX[ai], 0.0001);
-      float dx    = absHorizontalDist(acWindData[ai].x, texCoord.x) / radX;
-      float dy    = (texCoord.y - acWindData[ai].y) / max(radY, 0.0001);
-      float eDist = sqrt(dx * dx + dy * dy);
-      float w     = smoothstep(1.0, 0.0, eDist);
-      if (texCoord.y > acWindData[ai].y + radY) w = 0.0;
+      float ceiling = acWindData[ai].y;                    // max wind altitude (norm)
+      float hDist   = absHorizontalDist(acWindData[ai].x, texCoord.x) / max(acWindRadX[ai], 0.0001);
+      float hWeight = smoothstep(1.0, 0.0, hDist);
+      // wind fades out above the ceiling (strongest near ground)
+      float altFact = ceiling > 0.001 ? smoothstep(ceiling, ceiling * 0.15, texCoord.y) : 1.0;
+      float w       = hWeight * altFact;
+
       if (w > 0.001) {
-        // targetVX scales linearly with intensity: 0.12 = 60 km/h at max
-        float targetVX = acWindMoveX[ai] * 0.12 * acWindData[ai].z;
-        // blend strength: gentle (0.05/iter) so intensity controls actual speed
-        float blendStr = clamp(w * 0.05, 0.0, 0.5);
-        base[VX] = mix(base[VX], targetVX, blendStr);
+        // Directional wind: L only (acWindMoveX != 0). H = 0, no forced wind.
+        if (abs(acWindMoveX[ai]) > 0.001) {
+          float targetVX = acWindMoveX[ai] * 0.12 * acWindData[ai].z;
+          float blendStr = clamp(w * 0.05, 0.0, 0.5);
+          base[VX] = mix(base[VX], targetVX, blendStr);
+        }
+        // Temperature effect: acWindData.w < 0 = cooling (L), > 0 = warming (H)
+        base[TEMPERATURE] += acWindData[ai].w * 0.0001 * w * acWindData[ai].z;
       }
     }
   }

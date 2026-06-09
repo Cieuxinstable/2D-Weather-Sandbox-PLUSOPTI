@@ -6155,7 +6155,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     guiControls.acIntensity  = 5;    // 1-10
     guiControls.acFlux       = 0.0;  // -1 (cold/N) to +1 (warm/S)
     guiControls.acMove       = 1.0;  // -5 (W) to +5 (E), 0=stationary
-    guiControls.acWindAlt    = 1500; // 500-3000m
+    guiControls.acWindAlt    = 1500; // wind ceiling in metres (L only)
+    guiControls.acTemp       = 0.0;  // temperature effect in °C (L: neg=cool, H: pos=warm)
 
     // Label centre sélectionné
     guiControls.acSelected = 'none';
@@ -6170,8 +6171,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     pressure_folder.add(guiControls, 'acMove', -5.0, 5.0, 0.5)
       .name('Move W<0 E>0').listen()
       .onChange(function() { applyACSliders(); });
-    pressure_folder.add(guiControls, 'acWindAlt', 500, 3000, 100)
-      .name('Wind alt (m)').listen()
+    pressure_folder.add(guiControls, 'acWindAlt', 100, 15000, 100)
+      .name('Wind ceiling (m) [L]').listen()
+      .onChange(function() { applyACSliders(); });
+    pressure_folder.add(guiControls, 'acTemp', -5, 5, 0.5)
+      .name('Temp effect (°C)').listen()
       .onChange(function() { applyACSliders(); });
     soundings_folder.add(guiControls, 'showCAPE').name('Show CAPE').listen();
     soundings_folder.add(guiControls, 'showCIN').name('Show CIN').listen();
@@ -11042,11 +11046,13 @@ var soundingGraph = {
               y         : clamp(mouseYinSim, 0.0, 1.0),
               radius    : radiusNorm * 4.0,
               label     : type + (actionCenters.length + 1),
-              intensity : 5,           // 1-10 creusement
-              dirEast   : true,        // déplacement vers l'est
-              speed     : 0.0,         // vitesse calculée depuis intensity
-              corePressure : type === 'H' ? 1025 : 990, // hPa cœur
+              intensity : 5,
+              dirEast   : true,
+              speed     : 0.0,
+              corePressure : type === 'H' ? 1025 : 990,
               rampFactor : 0.0,
+              windAlt    : guiControls.acWindAlt || 1500,
+              tempEffect : type === 'H' ? 2.0 : -2.0,  // H warms, L cools by default
             };
             actionCenters.push(newAC);
             // Auto-select newly placed center
@@ -11054,7 +11060,8 @@ var soundingGraph = {
             guiControls.acIntensity = newAC.intensity;
             guiControls.acFlux      = newAC.flux      || 0.0;
             guiControls.acMove      = newAC.moveSpeed !== undefined ? newAC.moveSpeed : 1.0;
-            guiControls.acWindAlt   = newAC.windAlt   || 1500;
+            guiControls.acWindAlt   = newAC.windAlt;
+            guiControls.acTemp      = newAC.tempEffect;
           }
           // No direct shader injection - wind handled globally
           inputType = -1;
@@ -11119,20 +11126,23 @@ var soundingGraph = {
           if (guiControls.actionCentersEnabled && actionCenters.length > 0) {
             const maxAC = Math.min(actionCenters.length, 8);
             for (let ai = 0; ai < maxAC; ai++) {
-              const ac   = actionCenters[ai];
-              const mv   = ac.moveSpeed !== undefined ? ac.moveSpeed : 1.0;
-              const dir  = mv > 0 ? 1.0 : (mv < 0 ? -1.0 : 0.0);
-              if (dir === 0.0) continue; // stationary: no directional wind (blend toward 0 would damp flow)
+              const ac        = actionCenters[ai];
+              const mv        = ac.moveSpeed !== undefined ? ac.moveSpeed : 1.0;
+              const dir       = mv > 0 ? 1.0 : (mv < 0 ? -1.0 : 0.0);
               const ramp      = ac.rampFactor !== undefined ? ac.rampFactor : 1.0;
-              const normIntens = ((ac.intensity || 5) / 10.0) * ramp; // 0.0–1.0, linear
+              const normIntens = ((ac.intensity || 5) / 10.0) * ramp;
               const acPosX    = guiControls.wrapHorizontally ? mod(ac.x, 1.0) : clamp(ac.x, 0.0, 1.0);
-              const altY      = (ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
+              const windCeil  = (ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
               const radiusX   = ac.radius * sim_res_y / Math.max(sim_res_x, 1);
+              const tempFx    = ac.tempEffect !== undefined ? ac.tempEffect : (ac.type === 'H' ? 2.0 : -2.0);
+              // H = no directional wind (pressure gradient handles divergent flow naturally)
+              // L = directional wind following movement; stationary L (dir=0) also skips wind
+              const moveX = ac.type === 'L' ? dir : 0.0;
               _acWindData[_acWindCount * 4 + 0] = acPosX;
-              _acWindData[_acWindCount * 4 + 1] = altY;
-              _acWindData[_acWindCount * 4 + 2] = normIntens;           // intensity: 0.0–1.0
-              _acWindData[_acWindCount * 4 + 3] = ac.radius;
-              _acWindMoveX[_acWindCount] = dir * (ac.type === 'L' ? 1.0 : -0.4); // pure direction
+              _acWindData[_acWindCount * 4 + 1] = windCeil;   // altitude ceiling (normalised)
+              _acWindData[_acWindCount * 4 + 2] = normIntens; // 0.0–1.0
+              _acWindData[_acWindCount * 4 + 3] = tempFx;     // °C-equiv: neg=cool, pos=warm
+              _acWindMoveX[_acWindCount] = moveX;
               _acWindRadX [_acWindCount] = radiusX;
               _acWindCount++;
             }
@@ -12163,10 +12173,11 @@ var soundingGraph = {
       : actionCenters.length - 1;
     if (idx < 0) return;
     const ac = actionCenters[idx];
-    ac.intensity = guiControls.acIntensity;
-    ac.flux      = guiControls.acFlux;
-    ac.moveSpeed = guiControls.acMove;
-    ac.windAlt   = guiControls.acWindAlt;
+    ac.intensity  = guiControls.acIntensity;
+    ac.flux       = guiControls.acFlux;
+    ac.moveSpeed  = guiControls.acMove;
+    ac.windAlt    = guiControls.acWindAlt;
+    ac.tempEffect = guiControls.acTemp;
     guiControls.acSelected = ac.label + ' (' + ac.type + ')';
   }
 
@@ -12178,6 +12189,7 @@ var soundingGraph = {
     guiControls.acFlux      = ac.flux      || 0.0;
     guiControls.acMove      = ac.moveSpeed !== undefined ? ac.moveSpeed : 1.0;
     guiControls.acWindAlt   = ac.windAlt   || 1500;
+    guiControls.acTemp      = ac.tempEffect !== undefined ? ac.tempEffect : (ac.type === 'H' ? 2.0 : -2.0);
   }
 
   function initActionCenterCanvas() {
