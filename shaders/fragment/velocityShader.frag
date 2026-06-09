@@ -73,7 +73,7 @@ void main()
     float altFactor = windMaxAlt > 0.0 ? smoothstep(windMaxAlt, windMaxAlt * 0.5, texCoord.y) : 1.0;
     base[VX] += wind * 0.000001 * altFactor;
 
-    // Action center wind: directional flow matching depression/anticyclone movement
+    // Action center wind: blend toward target speed proportional to intensity
     for (int ai = 0; ai < acWindCount; ai++) {
       float radY  = acWindData[ai].w;
       float radX  = max(acWindRadX[ai], 0.0001);
@@ -83,8 +83,11 @@ void main()
       float w     = smoothstep(1.0, 0.0, eDist);
       if (texCoord.y > acWindData[ai].y + radY) w = 0.0;
       if (w > 0.001) {
-        base[VX] += acWindMoveX[ai] * 5.0 * w * acWindData[ai].z;
-        base[VX]  = clamp(base[VX], -0.15, 0.15);
+        // targetVX scales linearly with intensity: 0.12 = 60 km/h at max
+        float targetVX = acWindMoveX[ai] * 0.12 * acWindData[ai].z;
+        // blend strength: gentle (0.05/iter) so intensity controls actual speed
+        float blendStr = clamp(w * 0.05, 0.0, 0.5);
+        base[VX] = mix(base[VX], targetVX, blendStr);
       }
     }
   }

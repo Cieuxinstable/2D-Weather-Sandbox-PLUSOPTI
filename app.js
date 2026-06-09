@@ -11119,20 +11119,20 @@ var soundingGraph = {
           if (guiControls.actionCentersEnabled && actionCenters.length > 0) {
             const maxAC = Math.min(actionCenters.length, 8);
             for (let ai = 0; ai < maxAC; ai++) {
-              const ac    = actionCenters[ai];
-              const mv    = ac.moveSpeed !== undefined ? ac.moveSpeed : 1.0;
-              const ramp  = ac.rampFactor !== undefined ? ac.rampFactor : 1.0;
-              const intens = (0.01 + ((ac.intensity || 5) / 10.0) * 0.04) * ramp;
-              const dir   = mv > 0 ? 1.0 : (mv < 0 ? -1.0 : 0.0);
-              const moveX = dir * intens * (ac.type === 'L' ? 1.0 : -0.4);
-              const acPosX = guiControls.wrapHorizontally ? mod(ac.x, 1.0) : clamp(ac.x, 0.0, 1.0);
-              const altY   = (ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
-              const radiusX = ac.radius * sim_res_y / Math.max(sim_res_x, 1);
+              const ac   = actionCenters[ai];
+              const mv   = ac.moveSpeed !== undefined ? ac.moveSpeed : 1.0;
+              const dir  = mv > 0 ? 1.0 : (mv < 0 ? -1.0 : 0.0);
+              if (dir === 0.0) continue; // stationary: no directional wind (blend toward 0 would damp flow)
+              const ramp      = ac.rampFactor !== undefined ? ac.rampFactor : 1.0;
+              const normIntens = ((ac.intensity || 5) / 10.0) * ramp; // 0.0–1.0, linear
+              const acPosX    = guiControls.wrapHorizontally ? mod(ac.x, 1.0) : clamp(ac.x, 0.0, 1.0);
+              const altY      = (ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
+              const radiusX   = ac.radius * sim_res_y / Math.max(sim_res_x, 1);
               _acWindData[_acWindCount * 4 + 0] = acPosX;
               _acWindData[_acWindCount * 4 + 1] = altY;
-              _acWindData[_acWindCount * 4 + 2] = intens;
+              _acWindData[_acWindCount * 4 + 2] = normIntens;           // intensity: 0.0–1.0
               _acWindData[_acWindCount * 4 + 3] = ac.radius;
-              _acWindMoveX[_acWindCount] = moveX;
+              _acWindMoveX[_acWindCount] = dir * (ac.type === 'L' ? 1.0 : -0.4); // pure direction
               _acWindRadX [_acWindCount] = radiusX;
               _acWindCount++;
             }
