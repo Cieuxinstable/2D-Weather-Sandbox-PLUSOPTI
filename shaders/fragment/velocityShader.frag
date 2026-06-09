@@ -16,6 +16,12 @@ uniform float dragMultiplier;
 uniform float wind;
 uniform float windMaxAlt; // 0.0-1.0 normalized height limit for wind injection
 
+// Action center wind injection (up to 8 centers)
+uniform int   acWindCount;
+uniform vec4  acWindData[8];   // x=centerX, y=altY, z=intensity*ramp, w=radiusY
+uniform float acWindMoveX[8];  // signed wind speed (E+/W-), 0 = stationary
+uniform float acWindRadX[8];   // horizontal radius (ellipse, sim-space units)
+
 uniform vec2 texelSize;
 // uniform vec2 resolution;
 
@@ -66,5 +72,20 @@ void main()
     // Apply wind only below windMaxAlt (basses couches)
     float altFactor = windMaxAlt > 0.0 ? smoothstep(windMaxAlt, windMaxAlt * 0.5, texCoord.y) : 1.0;
     base[VX] += wind * 0.000001 * altFactor;
+
+    // Action center wind: directional flow matching depression/anticyclone movement
+    for (int ai = 0; ai < acWindCount; ai++) {
+      float radY  = acWindData[ai].w;
+      float radX  = max(acWindRadX[ai], 0.0001);
+      float dx    = absHorizontalDist(acWindData[ai].x, texCoord.x) / radX;
+      float dy    = (texCoord.y - acWindData[ai].y) / max(radY, 0.0001);
+      float eDist = sqrt(dx * dx + dy * dy);
+      float w     = smoothstep(1.0, 0.0, eDist);
+      if (texCoord.y > acWindData[ai].y + radY) w = 0.0;
+      if (w > 0.001) {
+        base[VX] += acWindMoveX[ai] * 5.0 * w * acWindData[ai].z;
+        base[VX]  = clamp(base[VX], -0.15, 0.15);
+      }
+    }
   }
 }

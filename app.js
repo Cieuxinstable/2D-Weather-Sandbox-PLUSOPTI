@@ -5508,6 +5508,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'dragMultiplier'), guiControls.dragMultiplier);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'wind'), guiControls.wind);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'windMaxAlt'), 1.0);
+    gl.uniform1i(gl.getUniformLocation(velocityProgram, 'acWindCount'), 0);
     gl.useProgram(lightingProgram);
     gl.uniform1f(gl.getUniformLocation(lightingProgram, 'waterTemperature'), CtoK(guiControls.waterTemperature));
     gl.uniform1f(gl.getUniformLocation(lightingProgram, 'greenhouseGases'), guiControls.greenhouseGases);
@@ -11109,6 +11110,34 @@ var soundingGraph = {
           let numIterations = guiControls.IterPerFrame;
           if (airplaneMode)
             numIterations = 1;
+
+          // ── Prepare AC wind data for velocity shader (once per frame) ──
+          let _acWindCount = 0;
+          const _acWindData  = new Float32Array(8 * 4);
+          const _acWindMoveX = new Float32Array(8);
+          const _acWindRadX  = new Float32Array(8);
+          if (guiControls.actionCentersEnabled && actionCenters.length > 0) {
+            const maxAC = Math.min(actionCenters.length, 8);
+            for (let ai = 0; ai < maxAC; ai++) {
+              const ac    = actionCenters[ai];
+              const mv    = ac.moveSpeed !== undefined ? ac.moveSpeed : 1.0;
+              const ramp  = ac.rampFactor !== undefined ? ac.rampFactor : 1.0;
+              const intens = (0.01 + ((ac.intensity || 5) / 10.0) * 0.04) * ramp;
+              const dir   = mv > 0 ? 1.0 : (mv < 0 ? -1.0 : 0.0);
+              const moveX = dir * intens * (ac.type === 'L' ? 1.0 : -0.4);
+              const acPosX = guiControls.wrapHorizontally ? mod(ac.x, 1.0) : clamp(ac.x, 0.0, 1.0);
+              const altY   = (ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
+              const radiusX = ac.radius * sim_res_y / Math.max(sim_res_x, 1);
+              _acWindData[_acWindCount * 4 + 0] = acPosX;
+              _acWindData[_acWindCount * 4 + 1] = altY;
+              _acWindData[_acWindCount * 4 + 2] = intens;
+              _acWindData[_acWindCount * 4 + 3] = ac.radius;
+              _acWindMoveX[_acWindCount] = moveX;
+              _acWindRadX [_acWindCount] = radiusX;
+              _acWindCount++;
+            }
+          }
+
           for (var i = 0; i < numIterations; i++) { // Simulation loop
             // calc and apply velocity
             gl.useProgram(velocityProgram);
@@ -11118,6 +11147,11 @@ var soundingGraph = {
             gl.bindTexture(gl.TEXTURE_2D, wallTexture_0);
             gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_1);
             gl.drawBuffers([ gl.COLOR_ATTACHMENT0, gl.NONE, gl.COLOR_ATTACHMENT2 ]);
+            // Upload AC wind forces (injected here so they survive advection + pressure)
+            gl.uniform1i(gl.getUniformLocation(velocityProgram, 'acWindCount'), _acWindCount);
+            gl.uniform4fv(gl.getUniformLocation(velocityProgram, 'acWindData[0]'), _acWindData);
+            gl.uniform1fv(gl.getUniformLocation(velocityProgram, 'acWindMoveX[0]'), _acWindMoveX);
+            gl.uniform1fv(gl.getUniformLocation(velocityProgram, 'acWindRadX[0]'), _acWindRadX);
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
             // calc curl
@@ -11169,28 +11203,6 @@ var soundingGraph = {
             gl.bindTexture(gl.TEXTURE_2D, wallTexture_0);
             gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_1);
             gl.drawBuffers([ gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2 ]);
-
-            // ── Vent des centres d'action (injecté ici, DANS la boucle) ──
-            if (!leftMousePressed && acWindInjection.active && guiControls.actionCentersEnabled) {
-              for (const _ac of actionCenters) {
-                const mv = _ac.moveSpeed !== undefined ? _ac.moveSpeed : 1.0;
-                if (mv === 0) continue;
-                const acPosX  = guiControls.wrapHorizontally ? mod(_ac.x, 1.0) : clamp(_ac.x, 0.0, 1.0);
-                const altY    = (_ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
-                const ramp    = _ac.rampFactor !== undefined ? _ac.rampFactor : 1.0;
-                // intensité utilisateur (slider 1-10) pilote la force, plafonnée dans le shader
-                const intens  = (0.01 + ((_ac.intensity || 5) / 10.0) * 0.04) * ramp;
-                const moveX   = (mv > 0 ? 1 : -1) * intens * (_ac.type === 'L' ? 1.0 : -0.4);
-                const radiusX = _ac.radius * sim_res_y / Math.max(sim_res_x, 1);
-                gl.uniform4f(gl.getUniformLocation(advectionProgram, 'userInputValues'), acPosX, altY, intens, _ac.radius);
-                gl.uniform2f(gl.getUniformLocation(advectionProgram, 'userInputMove'), moveX, radiusX);
-                gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), 8);
-                gl.uniform1i(gl.getUniformLocation(advectionProgram, 'wrapHorizontally'), guiControls.wrapHorizontally ? 1 : 0);
-                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-              }
-              // Remettre l'inputType du joueur pour le prochain draw
-              gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), inputType);
-            }
 
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
