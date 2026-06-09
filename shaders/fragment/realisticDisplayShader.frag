@@ -51,6 +51,7 @@ uniform vec4 cursor; // Xpos   Ypos  Size   type
 uniform float displayVectorField;
 
 uniform float iterNum;
+uniform float lightningRate; // 0 = off, 1 = full intensity
 
 out vec4 fragmentColor;
 
@@ -308,6 +309,7 @@ vec4 getAirColor(vec2 fragCoordIn)
 
   float lightningTime = calcLightningTime(lightningStartIterNum);
   float currentLightningIntensity = lightningIntensityOverTime(lightningTime, lightningPos, lightningData[INTENSITY]);
+  currentLightningIntensity *= lightningRate;
 
 
   if (lightningData[INTENSITY] > 1.0) { // CG

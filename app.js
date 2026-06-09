@@ -2048,6 +2048,7 @@ class Weatherstation
   #snowHeight = 0;   // cm
   #airQuality = 0;   // AQI
   #waterTemperature = 0;
+  #precipRate = 0;       // mm/h equivalent (EMA-smoothed)
 
   #netIRpow = 0;
   #solarPower = 0;
@@ -2292,6 +2293,10 @@ class Weatherstation
       this.#relativeHumd = Math.min(this.#relativeHumd, 100.0);
     }
 
+    // Precipitation rate: use current PRECIPITATION channel value as rain intensity proxy
+    const precipIntensity = waterTextureValues[4 + 2];
+    // EMA smoothing — scale converts sim units to approximate mm/h
+    this.#precipRate = this.#precipRate * 0.9 + precipIntensity * 50.0 * 0.1;
 
     if (waterTextureValues[0] > 1000.5 && waterTextureValues[0] < 1001.5) { // on land surface
       this.#soilMoisture = waterTextureValues[2];
@@ -2395,7 +2400,11 @@ class Weatherstation
       c.fillStyle = '#FFFFFF';
       c.fillText(printVelocity(this.#velocity), 20, 40);
 
-      if (this.#soilMoisture > 0.) {
+      // Precipitation rate display
+      if (this.#precipRate > 0.05) {
+        c.fillStyle = '#4488FF';
+        c.fillText('🌧 ' + this.#precipRate.toFixed(1) + ' mm/h', 0, 52);
+      } else if (this.#soilMoisture > 0.) {
         c.fillText(printSoilMoisture(this.#soilMoisture), 0, 52);
         c.fillText('💧', 20, 65);
       } else if (this.#waterTemperature > -1.0) {
@@ -5509,6 +5518,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'wind'), guiControls.wind);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'windMaxAlt'), 1.0);
     gl.uniform1i(gl.getUniformLocation(velocityProgram, 'acWindCount'), 0);
+    gl.useProgram(advectionProgram);
+    gl.uniform1i(gl.getUniformLocation(advectionProgram, 'acWindCount'), 0);
     gl.useProgram(lightingProgram);
     gl.uniform1f(gl.getUniformLocation(lightingProgram, 'waterTemperature'), CtoK(guiControls.waterTemperature));
     gl.uniform1f(gl.getUniformLocation(lightingProgram, 'greenhouseGases'), guiControls.greenhouseGases);
@@ -5798,6 +5809,50 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1i(gl.getUniformLocation(boundaryProgram, 'allowCaves'), guiControls.allowCaves ? 1 : 0);
       })
       .name('Allow Caves');
+
+    // ── Action Centers & Isobars ──────────────────────────────────────────
+    var pressure_folder = datGui.addFolder('Pressure Systems');
+    pressure_folder.add(guiControls, 'actionCentersEnabled').name('Enable H/L tools').listen();
+    pressure_folder.add(guiControls, 'showActionCenters').name('Show H/L circles').listen();
+    pressure_folder.add(guiControls, 'showIsobars').name('Show isobars').listen();
+    pressure_folder.add({clearCenters: function() { actionCenters = []; }}, 'clearCenters').name('Clear all H/L');
+
+    // ── Sliders for selected center ────────────────────────────────────────
+    guiControls.acIntensity  = 5;
+    guiControls.acFlux       = 0.0;
+    guiControls.acMove       = 1.0;
+    guiControls.acWindAlt    = 1500;
+    guiControls.acTemp       = 0.0;
+    guiControls.acLabel      = '';
+
+    guiControls.acSelected = 'none';
+    pressure_folder.add(guiControls, 'acSelected').name('Selected').listen();
+    pressure_folder.add(guiControls, 'acLabel').name('Rename [enter]').listen()
+      .onChange(function() { applyACSliders(); });
+
+    pressure_folder.add(guiControls, 'acIntensity', 1, 10, 1)
+      .name('Intensity 1-10').listen()
+      .onChange(function() { applyACSliders(); });
+    pressure_folder.add(guiControls, 'acFlux', -1.0, 1.0, 0.1)
+      .name('Flux N<0 S>0').listen()
+      .onChange(function() { applyACSliders(); });
+    pressure_folder.add(guiControls, 'acMove', -5.0, 5.0, 0.1)
+      .name('Move W<0 E>0').listen()
+      .onChange(function() { applyACSliders(); });
+    pressure_folder.add(guiControls, 'acWindAlt', 100, 15000, 100)
+      .name('Wind ceiling (m) [L]').listen()
+      .onChange(function() { applyACSliders(); });
+    pressure_folder.add(guiControls, 'acTemp', -5, 5, 0.5)
+      .name('Temp effect (°C)').listen()
+      .onChange(function() { applyACSliders(); });
+
+    guiControls.lightningRate = 1.0;
+    pressure_folder.add(guiControls, 'lightningRate', 0.0, 1.0, 0.05)
+      .name('Lightning intensity')
+      .onChange(function() {
+        gl.useProgram(realisticDisplayProgram);
+        gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningRate'), guiControls.lightningRate);
+      });
 
     var radiation_folder = datGui.addFolder('Radiation');
 
@@ -6144,39 +6199,6 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     soundings_folder.add(guiControls, 'showGraph').onChange(hideOrShowGraph).name('Show Sounding Graph').listen();
     soundings_folder.add(guiControls, 'soundingSmoothing').name('Smooth Sounding (±2 cols)').listen().onChange(() => { soundingProbeNeedsRedraw = true; });
 
-    // ── Action Centers & Isobars ──────────────────────────────────────────
-    var pressure_folder = datGui.addFolder('Pressure Systems');
-    pressure_folder.add(guiControls, 'actionCentersEnabled').name('Enable H/L tools').listen();
-    pressure_folder.add(guiControls, 'showActionCenters').name('Show H/L circles').listen();
-    pressure_folder.add(guiControls, 'showIsobars').name('Show isobars').listen();
-    pressure_folder.add({clearCenters: function() { actionCenters = []; }}, 'clearCenters').name('Clear all H/L');
-
-    // ── Sliders for last placed center ─────────────────────────────────────
-    guiControls.acIntensity  = 5;    // 1-10
-    guiControls.acFlux       = 0.0;  // -1 (cold/N) to +1 (warm/S)
-    guiControls.acMove       = 1.0;  // -5 (W) to +5 (E), 0=stationary
-    guiControls.acWindAlt    = 1500; // wind ceiling in metres (L only)
-    guiControls.acTemp       = 0.0;  // temperature effect in °C (L: neg=cool, H: pos=warm)
-
-    // Label centre sélectionné
-    guiControls.acSelected = 'none';
-    pressure_folder.add(guiControls, 'acSelected').name('Selected').listen();
-
-    pressure_folder.add(guiControls, 'acIntensity', 1, 10, 1)
-      .name('Intensity 1-10').listen()
-      .onChange(function() { applyACSliders(); });
-    pressure_folder.add(guiControls, 'acFlux', -1.0, 1.0, 0.1)
-      .name('Flux N<0 S>0').listen()
-      .onChange(function() { applyACSliders(); });
-    pressure_folder.add(guiControls, 'acMove', -5.0, 5.0, 0.5)
-      .name('Move W<0 E>0').listen()
-      .onChange(function() { applyACSliders(); });
-    pressure_folder.add(guiControls, 'acWindAlt', 100, 15000, 100)
-      .name('Wind ceiling (m) [L]').listen()
-      .onChange(function() { applyACSliders(); });
-    pressure_folder.add(guiControls, 'acTemp', -5, 5, 0.5)
-      .name('Temp effect (°C)').listen()
-      .onChange(function() { applyACSliders(); });
     soundings_folder.add(guiControls, 'showCAPE').name('Show CAPE').listen();
     soundings_folder.add(guiControls, 'showCIN').name('Show CIN').listen();
     soundings_folder.add(guiControls, 'showMLCAPE').name('Show MLCAPE').listen();
@@ -10770,6 +10792,7 @@ var soundingGraph = {
   gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'hailShaftTex'), 10);
   gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'dryLapse'), dryLapse);
   gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'cellHeight'), cellHeight);
+  gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningRate'), 1.0);
 
   gl.useProgram(precipitationProgram);
   gl.uniform1i(gl.getUniformLocation(precipitationProgram, 'baseTex'), 0);
@@ -11062,6 +11085,7 @@ var soundingGraph = {
             guiControls.acMove      = newAC.moveSpeed !== undefined ? newAC.moveSpeed : 1.0;
             guiControls.acWindAlt   = newAC.windAlt;
             guiControls.acTemp      = newAC.tempEffect;
+            guiControls.acLabel     = newAC.label;
           }
           // No direct shader injection - wind handled globally
           inputType = -1;
@@ -11213,6 +11237,11 @@ var soundingGraph = {
             gl.bindTexture(gl.TEXTURE_2D, wallTexture_0);
             gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_1);
             gl.drawBuffers([ gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2 ]);
+            // Upload AC data so anticyclone drying runs in advection shader
+            gl.uniform1i(gl.getUniformLocation(advectionProgram, 'acWindCount'), _acWindCount);
+            gl.uniform4fv(gl.getUniformLocation(advectionProgram, 'acWindData[0]'), _acWindData);
+            gl.uniform1fv(gl.getUniformLocation(advectionProgram, 'acWindMoveX[0]'), _acWindMoveX);
+            gl.uniform1fv(gl.getUniformLocation(advectionProgram, 'acWindRadX[0]'), _acWindRadX);
 
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
@@ -11654,6 +11683,7 @@ var soundingGraph = {
       gl.uniform4f(gl.getUniformLocation(realisticDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'Xmult'), horizontalDisplayMult);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'iterNum'), iterNum);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningRate'), guiControls.lightningRate !== undefined ? guiControls.lightningRate : 1.0);
 
       // Don't display vectors when zoomed out because you would just see noise
       if (cam.curZoom / sim_res_x > 0.003) {
@@ -12178,6 +12208,9 @@ var soundingGraph = {
     ac.moveSpeed  = guiControls.acMove;
     ac.windAlt    = guiControls.acWindAlt;
     ac.tempEffect = guiControls.acTemp;
+    if (guiControls.acLabel && guiControls.acLabel.trim() !== '') {
+      ac.label = guiControls.acLabel.trim();
+    }
     guiControls.acSelected = ac.label + ' (' + ac.type + ')';
   }
 
@@ -12190,6 +12223,7 @@ var soundingGraph = {
     guiControls.acMove      = ac.moveSpeed !== undefined ? ac.moveSpeed : 1.0;
     guiControls.acWindAlt   = ac.windAlt   || 1500;
     guiControls.acTemp      = ac.tempEffect !== undefined ? ac.tempEffect : (ac.type === 'H' ? 2.0 : -2.0);
+    guiControls.acLabel     = ac.label || '';
   }
 
   function initActionCenterCanvas() {
