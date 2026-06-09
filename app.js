@@ -1213,6 +1213,8 @@ const guiControls_default = {
   IterPerFrame : 6,
   auto_IterPerFrame : true,
   sound : true,
+  lightningEnabled : true,
+  lightningReduction : 0,
   showActionCenters : true,
   showIsobars : true,
   actionCentersEnabled : true,
@@ -2044,6 +2046,7 @@ class Weatherstation
   #dewpoint = 0;     // °C
   #relativeHumd = 0; // %
   #velocity = 0;     // ms
+  #precipRate = 0;   // mm/min
   #soilMoisture = 0; // mm
   #snowHeight = 0;   // cm
   #airQuality = 0;   // AQI
@@ -2287,6 +2290,9 @@ class Weatherstation
     }
 
     this.#relativeHumd = relativeHumd(T, waterTextureValues[4 + 0]);
+    // Intensité pluviométrique mm/min : précipitation dans l'air (channel 2)
+    let precipInAir = Math.max(0, waterTextureValues[4 + 2]);
+    this.#precipRate = precipInAir * 60.0 * guiControls.fallSpeed * 50000.0;
 
     if (guiControls.realDewPoint) {
       this.#relativeHumd = Math.min(this.#relativeHumd, 100.0);
@@ -2443,6 +2449,12 @@ class Weatherstation
       c.font = '9px Arial';
       c.fillStyle = '#ffe066';
       c.fillText(label, 90, 28);
+    }
+    // Intensité pluviométrique mm/min
+    if (this.#precipRate > 0.01) {
+      c.font = 'bold 10px Arial';
+      c.fillStyle = '#4db8ff';
+      c.fillText('🌧 ' + this.#precipRate.toFixed(2) + ' mm/min', 60, 40);
     }
 
     // Position pointer
@@ -6011,6 +6023,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .name('Evaporation Rate');
 
     precipitation_folder.add(guiControls, 'inactiveDroplets', 0, NUM_DROPLETS).listen().name('Inactive Droplets');
+    precipitation_folder.add(guiControls, 'lightningEnabled').name('Foudre activee');
+    precipitation_folder.add(guiControls, 'lightningReduction', 0, 100, 5).name('Foudre reduction %');
 
 
     var display_folder = datGui.addFolder('Display');
@@ -6205,6 +6219,17 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     pressure_folder.add(guiControls, 'acWindAlt', 500, 3000, 100)
       .name('Wind alt (m)').listen()
       .onChange(function() { applyACSliders(); });
+    pressure_folder.add({renameAC: function() {
+      const idx = selectedACIndex >= 0 && selectedACIndex < actionCenters.length
+        ? selectedACIndex : actionCenters.length - 1;
+      if (idx < 0) { alert('Aucun centre sélectionné'); return; }
+      const ac = actionCenters[idx];
+      const newName = prompt('Nom du centre ' + ac.label + ' :', ac.label);
+      if (newName !== null && newName.trim() !== '') {
+        ac.label = newName.trim();
+        guiControls.acSelected = ac.label + ' (' + ac.type + ')';
+      }
+    }}, 'renameAC').name('Renommer le centre...');
     soundings_folder.add(guiControls, 'showCAPE').name('Show CAPE').listen();
     soundings_folder.add(guiControls, 'showCIN').name('Show CIN').listen();
     soundings_folder.add(guiControls, 'showMLCAPE').name('Show MLCAPE').listen();
@@ -11337,7 +11362,12 @@ var soundingGraph = {
               gl.bindVertexArray(fluidVao); // set screenfilling rect again
 
 
-              // Extract lightningLocation from precipitationfeedback
+              // Extract lightningLocation - desactivable + reduction
+              let _doLightning = guiControls.lightningEnabled;
+              if (_doLightning && guiControls.lightningReduction > 0) {
+                if (Math.random() * 100 < guiControls.lightningReduction) _doLightning = false;
+              }
+              if (_doLightning) {
               gl.useProgram(lightningLocationProgram);
               gl.uniform1f(gl.getUniformLocation(lightningLocationProgram, 'iterNum'), iterNum);
 
@@ -11358,6 +11388,7 @@ var soundingGraph = {
                   soundSystem.soundThunder(lightningDataValues[0], lightningDataValues[1], Math.pow(lightningDataValues[3], 2.0));
                 }
               }
+              } // fin if(_doLightning)
             }
 
             gl.useProgram(radarFieldUpdateProgram);
