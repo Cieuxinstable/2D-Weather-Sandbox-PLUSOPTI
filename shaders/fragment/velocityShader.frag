@@ -89,8 +89,12 @@ void main()
           float targetVX = acWindMoveX[ai] * 0.12 * acWindData[ai].z;
           float blendStr = clamp(w * 0.05, 0.0, 0.5);
           base[VX] = mix(base[VX], targetVX, blendStr);
+        } else {
+          // H center: calm wind progressively toward 0 at the core (anticyclone = high pressure = calm)
+          float dampStr = clamp(w * 0.015 * acWindData[ai].z, 0.0, 0.12);
+          base[VX] *= (1.0 - dampStr);
+          base[VY] *= (1.0 - dampStr);
         }
-        // H center: no wind effect, only humidity drying (in advectionShader) + temperature
         // Temperature effect: acWindData.w > 0 = H (warming), < 0 = L (cooling)
         base[TEMPERATURE] += acWindData[ai].w * 0.0001 * w * acWindData[ai].z;
       }

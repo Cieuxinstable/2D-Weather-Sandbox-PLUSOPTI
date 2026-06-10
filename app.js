@@ -1240,7 +1240,7 @@ const guiControls_default = {
   auto_IterPerFrame : true,
   sound : true,
   showActionCenters : true,
-  showIsobars : true,
+  showIsobars : false,
   actionCentersEnabled : true,
   dryLapseRate : 10.0,     // Real: 9.8 degrees / km
   simHeight : 12000,       // meters
@@ -11543,8 +11543,8 @@ var soundingGraph = {
             }
 
             if (displayWeatherStations && iterNum % 208 == 0) { // ~every 60 in game seconds:  0.00008 *3600 * 208 = 59.9
-              for (i = 0; i < weatherStations.length; i++) {
-                weatherStations[i].measure();
+              for (let wsi = 0; wsi < weatherStations.length; wsi++) {
+                weatherStations[wsi].measure();
               }
             }
             if (!airplaneMode) {
@@ -12457,7 +12457,9 @@ var soundingGraph = {
   }
 
   function computeCapeColumns() {
-    const step   = Math.max(1, Math.floor(sim_res_x / NUM_CAPE_SAMPLES));
+    // On large maps: fewer columns = far fewer GPU readPixels stalls (each column = 3 sync stalls)
+    const _capeSamples = sim_res_x * sim_res_y > 4000000 ? 20 : NUM_CAPE_SAMPLES;
+    const step   = Math.max(1, Math.floor(sim_res_x / _capeSamples));
     const actualN = Math.ceil(sim_res_x / step);
 
     if (!capeColumnValues || capeColumnValues.length !== actualN) {
@@ -12553,8 +12555,9 @@ var soundingGraph = {
     if (capeCanvas.width !== W)  capeCanvas.width  = W;
     if (capeCanvas.height !== H) capeCanvas.height = H;
 
-    // Recompute CAPE values periodically
-    if (frameNum - lastCapeFrame >= CAPE_RECOMPUTE_INTERVAL) {
+    // Recompute CAPE values: throttle heavily on large maps (each column = 3 GPU readPixels stalls)
+    const _capeInterval = sim_res_x * sim_res_y > 4000000 ? 120 : CAPE_RECOMPUTE_INTERVAL;
+    if (frameNum - lastCapeFrame >= _capeInterval) {
       computeCapeColumns();
       lastCapeFrame = frameNum;
     }
@@ -12564,6 +12567,13 @@ var soundingGraph = {
 
     const values = activeMode === 'DISP_CIN' ? cinColumnValues : capeColumnValues;
     const N = capeColumnValues.length;
+
+    // Clip columns to the simulation area on screen (not full canvas height)
+    const _simScreenTop = simToScreenY(sim_res_y - 0.5);
+    const _simScreenBot = simToScreenY(-0.5);
+    const _drawTop = Math.max(0, Math.min(_simScreenTop, _simScreenBot));
+    const _drawBot = Math.min(H, Math.max(_simScreenTop, _simScreenBot));
+    const _drawH   = Math.max(0, _drawBot - _drawTop);
 
     // Draw colored vertical columns
     for (let si = 0; si < N; si++) {
@@ -12578,7 +12588,7 @@ var soundingGraph = {
       if (x1screen < 0 || x0screen > W) continue;
 
       capeCtx.fillStyle = color;
-      capeCtx.fillRect(Math.floor(x0screen), 0, Math.max(1, Math.ceil(x1screen - x0screen)), H);
+      capeCtx.fillRect(Math.floor(x0screen), _drawTop, Math.max(1, Math.ceil(x1screen - x0screen)), _drawH);
     }
 
     // Legend
