@@ -7942,6 +7942,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   function startSimulation()
   {
     SETUP_MODE = false;
+    // Start with a lower iteration count on large maps so the GPU doesn't spike on the first frames
+    if (sim_res_x * sim_res_y > 4000000 && guiControls.IterPerFrame > 3) {
+      guiControls.IterPerFrame = 3;
+    }
     datGui.show(); // unhide
     ensureRadarPanel();
     toggleRadarPanel(false);
@@ -9567,6 +9571,12 @@ var soundingGraph = {
   // Async thunder readback: GPU fence so readPixels never blocks the main loop
   let _thunderSyncFence = null;
   let _thunderLastStrikeIter = -1;
+  // Async inactive-droplet readback (fires every ~5s, avoids GPU stall)
+  let _dropletSyncFence = null;
+  // Persistent AC wind arrays reused each frame (avoids per-frame GC pressure)
+  const _acWindDataBuf  = new Float32Array(8 * 4);
+  const _acWindMoveXBuf = new Float32Array(8);
+  const _acWindRadXBuf  = new Float32Array(8);
 
   const precipitationVao_0 = gl.createVertexArray();
   const precipVertexBuffer_0 = gl.createBuffer();
@@ -11059,6 +11069,25 @@ var soundingGraph = {
       }
     }
 
+    // Non-blocking inactive droplet count readback (fires ~once every 5s)
+    if (_dropletSyncFence) {
+      const _dsFence = gl.clientWaitSync(_dropletSyncFence, 0, 0);
+      if (_dsFence === gl.ALREADY_SIGNALED || _dsFence === gl.CONDITION_SATISFIED) {
+        gl.deleteSync(_dropletSyncFence);
+        _dropletSyncFence = null;
+        gl.bindFramebuffer(gl.FRAMEBUFFER, precipitationFeedbackFrameBuff);
+        gl.readBuffer(gl.COLOR_ATTACHMENT0);
+        var _dropBuf = new Float32Array(4);
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, _dropBuf);
+        guiControls.inactiveDroplets = _dropBuf[0];
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'inactiveDroplets'), _dropBuf[0]);
+      } else if (_dsFence === gl.WAIT_FAILED) {
+        gl.deleteSync(_dropletSyncFence);
+        _dropletSyncFence = null;
+      }
+    }
+
     let camPanSpeed = guiControls.camSpeed;
 
     if (rightCtrlPressed) {
@@ -11282,9 +11311,10 @@ var soundingGraph = {
 
           // ── Prepare AC wind data for velocity shader (once per frame) ──
           let _acWindCount = 0;
-          const _acWindData  = new Float32Array(8 * 4);
-          const _acWindMoveX = new Float32Array(8);
-          const _acWindRadX  = new Float32Array(8);
+          // Reuse pre-allocated buffers — no new Float32Array per frame
+          const _acWindData  = _acWindDataBuf;
+          const _acWindMoveX = _acWindMoveXBuf;
+          const _acWindRadX  = _acWindRadXBuf;
           if (guiControls.actionCentersEnabled && actionCenters.length > 0) {
             const maxAC = Math.min(actionCenters.length, 8);
             for (let ai = 0; ai < maxAC; ai++) {
@@ -11341,21 +11371,24 @@ var soundingGraph = {
             gl.uniform1fv(_uloc_vel_acRadX,  _acWindRadX);
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-            // calc curl
-            gl.useProgram(curlProgram);
-            gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, baseTexture_1);
-            gl.bindFramebuffer(gl.FRAMEBUFFER, curlFrameBuff);
-            gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            // Curl + vorticity: skip odd iterations on large maps (vorticity changes slowly — save 2 passes per 2 iters)
+            if (!_largemap || i % 2 === 0) {
+              // calc curl
+              gl.useProgram(curlProgram);
+              gl.activeTexture(gl.TEXTURE0);
+              gl.bindTexture(gl.TEXTURE_2D, baseTexture_1);
+              gl.bindFramebuffer(gl.FRAMEBUFFER, curlFrameBuff);
+              gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
+              gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-            // calculate vorticity
-            gl.useProgram(vorticityProgram);
-            gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, curlTexture);
-            gl.bindFramebuffer(gl.FRAMEBUFFER, vortForceFrameBuff);
-            gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+              // calculate vorticity
+              gl.useProgram(vorticityProgram);
+              gl.activeTexture(gl.TEXTURE0);
+              gl.bindTexture(gl.TEXTURE_2D, curlTexture);
+              gl.bindFramebuffer(gl.FRAMEBUFFER, vortForceFrameBuff);
+              gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
+              gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            }
 
             // apply vorticity, boundary conditions and user input
             gl.useProgram(boundaryProgram);
@@ -11474,13 +11507,10 @@ var soundingGraph = {
               gl.drawArrays(gl.POINTS, 0, NUM_DROPLETS);
               gl.endTransformFeedback();
 
-              // sample to count inactive droplets once per frame (i==0) every ~5s to avoid GPU sync stall
-              if (i == 0 && frameNum % 300 == 0) {
-                gl.readBuffer(gl.COLOR_ATTACHMENT0);
-                var sampleValues = new Float32Array(4);
-                gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, sampleValues);
-                guiControls.inactiveDroplets = sampleValues[0];
-                gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'inactiveDroplets'), sampleValues[0]);
+              // Schedule async inactive droplet readback every ~5s (fence checked next frame, no stall)
+              if (i == 0 && frameNum % 300 == 0 && !_dropletSyncFence) {
+                _dropletSyncFence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+                gl.flush();
               }
 
               gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
