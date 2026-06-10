@@ -11434,16 +11434,12 @@ var soundingGraph = {
               gl.drawArrays(gl.POINTS, 0, NUM_DROPLETS);
               gl.endTransformFeedback();
 
-              // sample to count number of inactive droplets
-              if (iterNum % 600 == 0) {
+              // sample to count number of inactive droplets (every ~5s real-time to avoid GPU sync stall)
+              if (frameNum % 300 == 0) {
                 gl.readBuffer(gl.COLOR_ATTACHMENT0);
                 var sampleValues = new Float32Array(4);
-                // console.time('cnt');
                 gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, sampleValues);
-                // console.timeEnd('cnt')         // 1 - 100 ms huge variation
-                // console.log(sampleValues[0]);  // number of inactive droplets
                 guiControls.inactiveDroplets = sampleValues[0];
-                // gl.useProgram(precipitationProgram); // already set
                 gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'inactiveDroplets'), sampleValues[0]);
               }
 
