@@ -1239,7 +1239,7 @@ const guiControls_default = {
   IterPerFrame : 6,
   auto_IterPerFrame : true,
   sound : true,
-  showActionCenters : true,
+  showActionCenters : false,
   showIsobars : false,
   actionCentersEnabled : true,
   dryLapseRate : 10.0,     // Real: 9.8 degrees / km
@@ -5623,6 +5623,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   var radarSweepDurationController;
   var autoExposureMinController;
   var autoExposureMaxController;
+  var rebuildACDropdown = null; // set by setupDatGui, called from simulation loop
 
   function setDatGuiControllerVisible(controller, visible)
   {
@@ -5883,9 +5884,13 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     pressure_folder.add(guiControls, 'actionCentersEnabled').name('Enable H/L tools').listen();
     pressure_folder.add(guiControls, 'showActionCenters').name('Show H/L circles').listen();
     pressure_folder.add(guiControls, 'showIsobars').name('Show isobars').listen();
-    pressure_folder.add({clearCenters: function() { actionCenters = []; }}, 'clearCenters').name('Clear all H/L');
+    pressure_folder.add({clearCenters: function() {
+      actionCenters = [];
+      if (rebuildACDropdown) rebuildACDropdown();
+    }}, 'clearCenters').name('Clear all H/L');
 
-    // ── Sliders for selected center ────────────────────────────────────────
+    // ── Selected center dropdown (rebuilt dynamically when centers change) ─
+    guiControls.acDropdown   = 'none';
     guiControls.acIntensity  = 5;
     guiControls.acFlux       = 0.0;
     guiControls.acMove       = 1.0;
@@ -5893,25 +5898,47 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     guiControls.acTemp       = 0.0;
     guiControls.acLabel      = '';
 
-    guiControls.acSelected = 'none';
-    pressure_folder.add(guiControls, 'acSelected').name('Selected').listen();
+    var _acDropdownController = null;
+    rebuildACDropdown = function() {
+      if (_acDropdownController) {
+        try { pressure_folder.remove(_acDropdownController); } catch(e) {}
+        _acDropdownController = null;
+      }
+      var opts = ['none'].concat(actionCenters.map(function(ac) { return ac.label + ' (' + ac.type + ')'; }));
+      if (opts.indexOf(guiControls.acDropdown) < 0) guiControls.acDropdown = 'none';
+      _acDropdownController = pressure_folder.add(guiControls, 'acDropdown', opts)
+        .name('Select')
+        .onChange(function(val) {
+          var idx = actionCenters.findIndex(function(ac) { return ac.label + ' (' + ac.type + ')' === val; });
+          if (idx >= 0) selectAC(idx);
+          else { selectedACIndex = -1; }
+        });
+    };
+    rebuildACDropdown();
+
     pressure_folder.add(guiControls, 'acLabel').name('Rename [enter]').listen()
+      .onChange(function() { applyACSliders(); if (rebuildACDropdown) rebuildACDropdown(); });
+
+    // ── H (Anticyclone) parameters ─────────────────────────────────────────
+    var ac_H_folder = pressure_folder.addFolder('H — Anticyclone');
+    ac_H_folder.add(guiControls, 'acIntensity', 1, 10, 1).name('Intensity 1-10').listen()
+      .onChange(function() { applyACSliders(); });
+    ac_H_folder.add(guiControls, 'acMove', -5.0, 5.0, 0.1).name('Move W<0 E>0').listen()
+      .onChange(function() { applyACSliders(); });
+    ac_H_folder.add(guiControls, 'acTemp', -5, 5, 0.5).name('Temp effect (°C)').listen()
       .onChange(function() { applyACSliders(); });
 
-    pressure_folder.add(guiControls, 'acIntensity', 1, 10, 1)
-      .name('Intensity 1-10').listen()
+    // ── L (Depression) parameters ──────────────────────────────────────────
+    var ac_L_folder = pressure_folder.addFolder('L — Depression');
+    ac_L_folder.add(guiControls, 'acIntensity', 1, 10, 1).name('Intensity 1-10').listen()
       .onChange(function() { applyACSliders(); });
-    pressure_folder.add(guiControls, 'acFlux', -1.0, 1.0, 0.1)
-      .name('Flux N<0 S>0').listen()
+    ac_L_folder.add(guiControls, 'acFlux', -1.0, 1.0, 0.1).name('Flux N<0 S>0').listen()
       .onChange(function() { applyACSliders(); });
-    pressure_folder.add(guiControls, 'acMove', -5.0, 5.0, 0.1)
-      .name('Move W<0 E>0').listen()
+    ac_L_folder.add(guiControls, 'acMove', -5.0, 5.0, 0.1).name('Move W<0 E>0').listen()
       .onChange(function() { applyACSliders(); });
-    pressure_folder.add(guiControls, 'acWindAlt', 100, 15000, 100)
-      .name('Wind ceiling (m) [L]').listen()
+    ac_L_folder.add(guiControls, 'acWindAlt', 100, 15000, 100).name('Wind ceiling (m)').listen()
       .onChange(function() { applyACSliders(); });
-    pressure_folder.add(guiControls, 'acTemp', -5, 5, 0.5)
-      .name('Temp effect (°C)').listen()
+    ac_L_folder.add(guiControls, 'acTemp', -5, 5, 0.5).name('Temp effect (°C)').listen()
       .onChange(function() { applyACSliders(); });
 
     var radiation_folder = datGui.addFolder('Radiation');
@@ -9577,6 +9604,9 @@ var soundingGraph = {
   const _acWindDataBuf  = new Float32Array(8 * 4);
   const _acWindMoveXBuf = new Float32Array(8);
   const _acWindRadXBuf  = new Float32Array(8);
+  // Persistent readback buffers: avoids Float32Array(4) allocation on every fence completion
+  const _thunderReadBuf  = new Float32Array(4);
+  const _dropletReadBuf  = new Float32Array(4);
 
   const precipitationVao_0 = gl.createVertexArray();
   const precipVertexBuffer_0 = gl.createBuffer();
@@ -11055,8 +11085,8 @@ var soundingGraph = {
         _thunderSyncFence = null;
         gl.bindFramebuffer(gl.FRAMEBUFFER, lightningDataFrameBuff);
         gl.readBuffer(gl.COLOR_ATTACHMENT0);
-        var _thunderBuf = new Float32Array(4);
-        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, _thunderBuf);
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, _thunderReadBuf);
+        const _thunderBuf = _thunderReadBuf;
         const _strikeIter = Math.round(_thunderBuf[2]);
         if (_strikeIter > _thunderLastStrikeIter) {
           if (guiControls.enablePrecipitation && guiControls.lightningEnabled !== false && guiControls.sound)
@@ -11077,8 +11107,8 @@ var soundingGraph = {
         _dropletSyncFence = null;
         gl.bindFramebuffer(gl.FRAMEBUFFER, precipitationFeedbackFrameBuff);
         gl.readBuffer(gl.COLOR_ATTACHMENT0);
-        var _dropBuf = new Float32Array(4);
-        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, _dropBuf);
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, _dropletReadBuf);
+        const _dropBuf = _dropletReadBuf;
         guiControls.inactiveDroplets = _dropBuf[0];
         gl.useProgram(precipitationProgram);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'inactiveDroplets'), _dropBuf[0]);
@@ -11247,6 +11277,8 @@ var soundingGraph = {
             actionCenters.push(newAC);
             // Auto-select newly placed center
             selectedACIndex = actionCenters.length - 1;
+            if (rebuildACDropdown) rebuildACDropdown();
+            guiControls.acDropdown  = newAC.label + ' (' + newAC.type + ')';
             guiControls.acIntensity = newAC.intensity;
             guiControls.acFlux      = newAC.flux      || 0.0;
             guiControls.acMove      = newAC.moveSpeed !== undefined ? newAC.moveSpeed : 1.0;
@@ -11371,8 +11403,8 @@ var soundingGraph = {
             gl.uniform1fv(_uloc_vel_acRadX,  _acWindRadX);
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-            // Curl + vorticity: skip odd iterations on large maps (vorticity changes slowly — save 2 passes per 2 iters)
-            if (!_largemap || i % 2 === 0) {
+            // Curl + vorticity: skip odd iterations on large maps; always run when user is actively painting
+            if (!_largemap || i % 2 === 0 || inputType > 0) {
               // calc curl
               gl.useProgram(curlProgram);
               gl.activeTexture(gl.TEXTURE0);
@@ -12340,14 +12372,6 @@ var soundingGraph = {
   const dtAC  = lastACUpdateTime > 0 ? Math.min(nowAC - lastACUpdateTime, 100) : 16;
   lastACUpdateTime = nowAC;
   if (!guiControls.paused) updateActionCenters(dtAC);
-  // Update selected label
-  if (typeof guiControls.acSelected !== 'undefined') {
-    const sidx = selectedACIndex >= 0 && selectedACIndex < actionCenters.length
-      ? selectedACIndex : actionCenters.length - 1;
-    guiControls.acSelected = sidx >= 0
-      ? actionCenters[sidx].label + ' (' + actionCenters[sidx].type + ')'
-      : 'none';
-  }
   drawActionCenters();
   drawCapeOverlayIfActive();
 
@@ -12402,7 +12426,7 @@ var soundingGraph = {
     if (guiControls.acLabel && guiControls.acLabel.trim() !== '') {
       ac.label = guiControls.acLabel.trim();
     }
-    guiControls.acSelected = ac.label + ' (' + ac.type + ')';
+    guiControls.acDropdown = ac.label + ' (' + ac.type + ')';
   }
 
   function selectAC(idx) {
@@ -12415,6 +12439,7 @@ var soundingGraph = {
     guiControls.acWindAlt   = ac.windAlt   || 1500;
     guiControls.acTemp      = ac.tempEffect !== undefined ? ac.tempEffect : (ac.type === 'H' ? 2.0 : -2.0);
     guiControls.acLabel     = ac.label || '';
+    guiControls.acDropdown  = ac.label + ' (' + ac.type + ')';
   }
 
   // ── CAPE / CIN overlay functions ───────────────────────────────────────
