@@ -540,9 +540,9 @@ void main()
       float altFact = ceiling > 0.001 ? smoothstep(ceiling, ceiling * 0.15, texCoord.y) : 1.0;
       float w       = hWeight * altFact;
       if (w > 0.001) {
-        float dryStr  = acWindData[ai].z * w * 0.0001;
-        water[TOTAL]  = max(water[TOTAL]  - dryStr,       0.0);
-        water[CLOUD]  = max(water[CLOUD]  - dryStr * 3.0, 0.0);
+        float dryStr = acWindData[ai].z * w * 0.001;
+        water[TOTAL] = max(water[TOTAL] - dryStr, 0.0);
+        water[CLOUD] = min(water[CLOUD], water[TOTAL]); // cloud can't exceed total after drying
       }
     }
   }

@@ -3217,7 +3217,10 @@ async function loadData()
       sim_res_x = resArray[0];
       sim_res_y = resArray[1];
 
-      NUM_DROPLETS = (sim_res_x * sim_res_y) / NUM_DROPLETS_DEVIDER;
+      NUM_DROPLETS = Math.min(
+        Math.round((sim_res_x * sim_res_y) / NUM_DROPLETS_DEVIDER),
+        Math.round(sim_res_y * 120)  // cap: wide maps don't need 8x more particles than medium
+      );
 
       saveFileName = file.name;
 
@@ -3301,7 +3304,10 @@ async function loadData()
     sim_res_y = parseInt(document.getElementById('simResSelY').value);
     sim_height = parseInt(document.getElementById('simHeightSel').value);
 
-    NUM_DROPLETS = (sim_res_x * sim_res_y) / NUM_DROPLETS_DEVIDER;
+    NUM_DROPLETS = Math.min(
+      Math.round((sim_res_x * sim_res_y) / NUM_DROPLETS_DEVIDER),
+      Math.round(sim_res_y * 120)  // cap: wide maps don't need 8x more particles than medium
+    );
     SETUP_MODE = true;
 
     mainScript(null); // run without initial textures
