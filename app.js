@@ -11187,7 +11187,7 @@ var soundingGraph = {
               speed     : 0.0,
               corePressure : type === 'H' ? 1025 : 990,
               rampFactor : 0.0,
-              windAlt    : guiControls.acWindAlt || 1500,
+              windAlt    : type === 'H' ? (guiControls.simHeight || sim_height) : (guiControls.acWindAlt || 1500),
               tempEffect : type === 'H' ? 2.0 : -2.0,
             };
             actionCenters.push(newAC);
@@ -11434,8 +11434,8 @@ var soundingGraph = {
               gl.drawArrays(gl.POINTS, 0, NUM_DROPLETS);
               gl.endTransformFeedback();
 
-              // sample to count number of inactive droplets (every ~5s real-time to avoid GPU sync stall)
-              if (frameNum % 300 == 0) {
+              // sample to count inactive droplets once per frame (i==0) every ~5s to avoid GPU sync stall
+              if (i == 0 && frameNum % 300 == 0) {
                 gl.readBuffer(gl.COLOR_ATTACHMENT0);
                 var sampleValues = new Float32Array(4);
                 gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, sampleValues);
@@ -11458,7 +11458,7 @@ var soundingGraph = {
               gl.bindVertexArray(fluidVao); // set screenfilling rect again
 
 
-              // Extract lightningLocation from precipitationfeedback
+              // Extract lightningLocation from precipitationfeedback (GPU write, no readback here)
               if (guiControls.lightningEnabled !== false) {
                 gl.useProgram(lightningLocationProgram);
                 gl.uniform1f(gl.getUniformLocation(lightningLocationProgram, 'iterNum'), iterNum);
@@ -11469,16 +11469,6 @@ var soundingGraph = {
                 gl.bindFramebuffer(gl.FRAMEBUFFER, lightningDataFrameBuff);
                 gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
                 gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-                if (guiControls.sound) {
-                  gl.readBuffer(gl.COLOR_ATTACHMENT0);
-                  var lightningDataValues = new Float32Array(4);
-                  gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, lightningDataValues);
-
-                  if (Math.round(lightningDataValues[2]) == iterNum) {
-                    soundSystem.soundThunder(lightningDataValues[0], lightningDataValues[1], Math.pow(lightningDataValues[3], 2.0));
-                  }
-                }
               }
             }
 
@@ -11516,6 +11506,18 @@ var soundingGraph = {
             }
             if (!airplaneMode) {
               iterNum++;
+            }
+          }
+
+          // Thunder sound readback: once per frame (outside iteration loop) to avoid repeated GPU stalls
+          if (guiControls.enablePrecipitation && guiControls.lightningEnabled !== false && guiControls.sound) {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, lightningDataFrameBuff);
+            gl.readBuffer(gl.COLOR_ATTACHMENT0);
+            var lightningDataValues = new Float32Array(4);
+            gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, lightningDataValues);
+            const strikeIter = Math.round(lightningDataValues[2]);
+            if (strikeIter > iterNum - numIterations && strikeIter <= iterNum) {
+              soundSystem.soundThunder(lightningDataValues[0], lightningDataValues[1], Math.pow(lightningDataValues[3], 2.0));
             }
           }
         }
