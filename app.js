@@ -9564,6 +9564,9 @@ var soundingGraph = {
   const dropletStrideBytes = valsPerDroplet * Float32Array.BYTES_PER_ELEMENT;
 
   var even = true; // used to switch between precipitation buffers
+  // Async thunder readback: GPU fence so readPixels never blocks the main loop
+  let _thunderSyncFence = null;
+  let _thunderLastStrikeIter = -1;
 
   const precipitationVao_0 = gl.createVertexArray();
   const precipVertexBuffer_0 = gl.createBuffer();
@@ -11034,6 +11037,28 @@ var soundingGraph = {
 
   function draw()
   { // Runs for every frame
+    // Non-blocking thunder check: fence from last frame lets readPixels return instantly
+    if (_thunderSyncFence) {
+      const _fStatus = gl.clientWaitSync(_thunderSyncFence, 0, 0);
+      if (_fStatus === gl.ALREADY_SIGNALED || _fStatus === gl.CONDITION_SATISFIED) {
+        gl.deleteSync(_thunderSyncFence);
+        _thunderSyncFence = null;
+        gl.bindFramebuffer(gl.FRAMEBUFFER, lightningDataFrameBuff);
+        gl.readBuffer(gl.COLOR_ATTACHMENT0);
+        var _thunderBuf = new Float32Array(4);
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, _thunderBuf);
+        const _strikeIter = Math.round(_thunderBuf[2]);
+        if (_strikeIter > _thunderLastStrikeIter) {
+          if (guiControls.enablePrecipitation && guiControls.lightningEnabled !== false && guiControls.sound)
+            soundSystem.soundThunder(_thunderBuf[0], _thunderBuf[1], Math.pow(_thunderBuf[3], 2.0));
+          _thunderLastStrikeIter = _strikeIter;
+        }
+      } else if (_fStatus === gl.WAIT_FAILED) {
+        gl.deleteSync(_thunderSyncFence);
+        _thunderSyncFence = null;
+      }
+    }
+
     let camPanSpeed = guiControls.camSpeed;
 
     if (rightCtrlPressed) {
@@ -11285,6 +11310,21 @@ var soundingGraph = {
             }
           }
 
+          // Cache uniform locations for hot loop (avoids ~12 hashmap lookups × numIterations)
+          const _uloc_vel_acCount = gl.getUniformLocation(velocityProgram,          'acWindCount');
+          const _uloc_vel_acData  = gl.getUniformLocation(velocityProgram,          'acWindData[0]');
+          const _uloc_vel_acMoveX = gl.getUniformLocation(velocityProgram,          'acWindMoveX[0]');
+          const _uloc_vel_acRadX  = gl.getUniformLocation(velocityProgram,          'acWindRadX[0]');
+          const _uloc_adv_acCount = gl.getUniformLocation(advectionProgram,         'acWindCount');
+          const _uloc_adv_acData  = gl.getUniformLocation(advectionProgram,         'acWindData[0]');
+          const _uloc_adv_acMoveX = gl.getUniformLocation(advectionProgram,         'acWindMoveX[0]');
+          const _uloc_adv_acRadX  = gl.getUniformLocation(advectionProgram,         'acWindRadX[0]');
+          const _uloc_precip_iter = gl.getUniformLocation(precipitationProgram,     'iterNum');
+          const _uloc_lloc_iter   = gl.getUniformLocation(lightningLocationProgram, 'iterNum');
+          const _uloc_radar_mode  = gl.getUniformLocation(radarFieldUpdateProgram,  'fieldUpdateMode');
+          // Large-map flag: skip precipitation on odd iterations to halve particle cost
+          const _largemap = sim_res_x * sim_res_y > 4000000;
+
           for (var i = 0; i < numIterations; i++) { // Simulation loop
             // calc and apply velocity
             gl.useProgram(velocityProgram);
@@ -11295,10 +11335,10 @@ var soundingGraph = {
             gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_1);
             gl.drawBuffers([ gl.COLOR_ATTACHMENT0, gl.NONE, gl.COLOR_ATTACHMENT2 ]);
             // Upload AC wind forces (injected here so they survive advection + pressure)
-            gl.uniform1i(gl.getUniformLocation(velocityProgram, 'acWindCount'), _acWindCount);
-            gl.uniform4fv(gl.getUniformLocation(velocityProgram, 'acWindData[0]'), _acWindData);
-            gl.uniform1fv(gl.getUniformLocation(velocityProgram, 'acWindMoveX[0]'), _acWindMoveX);
-            gl.uniform1fv(gl.getUniformLocation(velocityProgram, 'acWindRadX[0]'), _acWindRadX);
+            gl.uniform1i(_uloc_vel_acCount, _acWindCount);
+            gl.uniform4fv(_uloc_vel_acData,  _acWindData);
+            gl.uniform1fv(_uloc_vel_acMoveX, _acWindMoveX);
+            gl.uniform1fv(_uloc_vel_acRadX,  _acWindRadX);
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
             // calc curl
@@ -11351,10 +11391,10 @@ var soundingGraph = {
             gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_1);
             gl.drawBuffers([ gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2 ]);
             // Upload AC data so anticyclone drying runs in advection shader
-            gl.uniform1i(gl.getUniformLocation(advectionProgram, 'acWindCount'), _acWindCount);
-            gl.uniform4fv(gl.getUniformLocation(advectionProgram, 'acWindData[0]'), _acWindData);
-            gl.uniform1fv(gl.getUniformLocation(advectionProgram, 'acWindMoveX[0]'), _acWindMoveX);
-            gl.uniform1fv(gl.getUniformLocation(advectionProgram, 'acWindRadX[0]'), _acWindRadX);
+            gl.uniform1i(_uloc_adv_acCount, _acWindCount);
+            gl.uniform4fv(_uloc_adv_acData,  _acWindData);
+            gl.uniform1fv(_uloc_adv_acMoveX, _acWindMoveX);
+            gl.uniform1fv(_uloc_adv_acRadX,  _acWindRadX);
 
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
@@ -11411,10 +11451,10 @@ var soundingGraph = {
             gl.clearColor(0.0, 0.0, 0.0, 0.0);
             gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-            if (guiControls.enablePrecipitation) { // move precipitation, HUGE PERFORMANCE BOTTLENECK!
+            if (guiControls.enablePrecipitation && (!_largemap || i % 2 === 0)) { // skip odd iterations on large maps to halve particle cost
 
               gl.useProgram(precipitationProgram);
-              gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'iterNum'), iterNum);
+              gl.uniform1f(_uloc_precip_iter, iterNum);
               gl.enable(gl.BLEND);
               gl.blendFunc(gl.ONE, gl.ONE); // add everything together
               gl.activeTexture(gl.TEXTURE0);
@@ -11461,7 +11501,7 @@ var soundingGraph = {
               // Extract lightningLocation from precipitationfeedback (GPU write, no readback here)
               if (guiControls.lightningEnabled !== false) {
                 gl.useProgram(lightningLocationProgram);
-                gl.uniform1f(gl.getUniformLocation(lightningLocationProgram, 'iterNum'), iterNum);
+                gl.uniform1f(_uloc_lloc_iter, iterNum);
 
                 gl.activeTexture(gl.TEXTURE0);
                 gl.bindTexture(gl.TEXTURE_2D, precipitationFeedbackTexture);
@@ -11471,33 +11511,6 @@ var soundingGraph = {
                 gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
               }
             }
-
-            gl.useProgram(radarFieldUpdateProgram);
-            gl.uniform1i(gl.getUniformLocation(radarFieldUpdateProgram, 'fieldUpdateMode'), 0);
-            gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, baseTexture_1);
-            gl.activeTexture(gl.TEXTURE1);
-            gl.bindTexture(gl.TEXTURE_2D, wallTexture_1);
-            gl.activeTexture(gl.TEXTURE2);
-            gl.bindTexture(gl.TEXTURE_2D, radarFieldCurrentIndex == 0 ? radarFieldTexture_0 : radarFieldTexture_1);
-            gl.activeTexture(gl.TEXTURE3);
-            gl.bindTexture(gl.TEXTURE_2D, radarMomentsTexture);
-
-            gl.bindFramebuffer(gl.FRAMEBUFFER, radarFieldCurrentIndex == 0 ? radarFieldFrameBuff_1 : radarFieldFrameBuff_0);
-            gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-            radarFieldCurrentIndex = 1 - radarFieldCurrentIndex;
-
-            gl.uniform1i(gl.getUniformLocation(radarFieldUpdateProgram, 'fieldUpdateMode'), 1);
-            gl.activeTexture(gl.TEXTURE2);
-            gl.bindTexture(gl.TEXTURE_2D, hailShaftCurrentIndex == 0 ? hailShaftTexture_0 : hailShaftTexture_1);
-            gl.activeTexture(gl.TEXTURE3);
-            gl.bindTexture(gl.TEXTURE_2D, phaseTexture);
-
-            gl.bindFramebuffer(gl.FRAMEBUFFER, hailShaftCurrentIndex == 0 ? hailShaftFrameBuff_1 : hailShaftFrameBuff_0);
-            gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-            hailShaftCurrentIndex = 1 - hailShaftCurrentIndex;
 
             if (displayWeatherStations && iterNum % 208 == 0) { // ~every 60 in game seconds:  0.00008 *3600 * 208 = 59.9
               for (i = 0; i < weatherStations.length; i++) {
@@ -11509,16 +11522,39 @@ var soundingGraph = {
             }
           }
 
-          // Thunder sound readback: once per frame (outside iteration loop) to avoid repeated GPU stalls
-          if (guiControls.enablePrecipitation && guiControls.lightningEnabled !== false && guiControls.sound) {
-            gl.bindFramebuffer(gl.FRAMEBUFFER, lightningDataFrameBuff);
-            gl.readBuffer(gl.COLOR_ATTACHMENT0);
-            var lightningDataValues = new Float32Array(4);
-            gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, lightningDataValues);
-            const strikeIter = Math.round(lightningDataValues[2]);
-            if (strikeIter > iterNum - numIterations && strikeIter <= iterNum) {
-              soundSystem.soundThunder(lightningDataValues[0], lightningDataValues[1], Math.pow(lightningDataValues[3], 2.0));
-            }
+          // Radar field update: once per frame (purely visual, no simulation feedback — saves N-1 full-screen passes)
+          gl.useProgram(radarFieldUpdateProgram);
+          gl.uniform1i(_uloc_radar_mode, 0);
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, baseTexture_1);
+          gl.activeTexture(gl.TEXTURE1);
+          gl.bindTexture(gl.TEXTURE_2D, wallTexture_1);
+          gl.activeTexture(gl.TEXTURE2);
+          gl.bindTexture(gl.TEXTURE_2D, radarFieldCurrentIndex == 0 ? radarFieldTexture_0 : radarFieldTexture_1);
+          gl.activeTexture(gl.TEXTURE3);
+          gl.bindTexture(gl.TEXTURE_2D, radarMomentsTexture);
+
+          gl.bindFramebuffer(gl.FRAMEBUFFER, radarFieldCurrentIndex == 0 ? radarFieldFrameBuff_1 : radarFieldFrameBuff_0);
+          gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
+          gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+          radarFieldCurrentIndex = 1 - radarFieldCurrentIndex;
+
+          gl.uniform1i(_uloc_radar_mode, 1);
+          gl.activeTexture(gl.TEXTURE2);
+          gl.bindTexture(gl.TEXTURE_2D, hailShaftCurrentIndex == 0 ? hailShaftTexture_0 : hailShaftTexture_1);
+          gl.activeTexture(gl.TEXTURE3);
+          gl.bindTexture(gl.TEXTURE_2D, phaseTexture);
+
+          gl.bindFramebuffer(gl.FRAMEBUFFER, hailShaftCurrentIndex == 0 ? hailShaftFrameBuff_1 : hailShaftFrameBuff_0);
+          gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
+          gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+          hailShaftCurrentIndex = 1 - hailShaftCurrentIndex;
+
+          // Schedule async thunder readback: fence signals when GPU finishes this frame's work
+          // The check at draw() start will read it next frame without any blocking stall
+          if (guiControls.enablePrecipitation && guiControls.lightningEnabled !== false && guiControls.sound && !_thunderSyncFence) {
+            _thunderSyncFence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+            gl.flush();
           }
         }
 
