@@ -7970,8 +7970,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   {
     SETUP_MODE = false;
     // Start with a lower iteration count on large maps so the GPU doesn't spike on the first frames
-    if (sim_res_x * sim_res_y > 4000000 && guiControls.IterPerFrame > 3) {
-      guiControls.IterPerFrame = 3;
+    if (sim_res_x * sim_res_y > 4000000 && guiControls.IterPerFrame > 2) {
+      guiControls.IterPerFrame = 2;
     }
     datGui.show(); // unhide
     ensureRadarPanel();
@@ -11681,6 +11681,8 @@ var soundingGraph = {
           }
 
           // Radar field update: once per frame (purely visual, no simulation feedback — saves N-1 full-screen passes)
+          // On large maps skip every other frame to halve the per-frame GPU cost of these full-resolution passes
+          if (!_largemap || frameNum % 2 === 0) {
           gl.useProgram(radarFieldUpdateProgram);
           gl.uniform1i(_uloc_radar_mode, 0);
           gl.activeTexture(gl.TEXTURE0);
@@ -11707,6 +11709,7 @@ var soundingGraph = {
           gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
           gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
           hailShaftCurrentIndex = 1 - hailShaftCurrentIndex;
+          } // end large map skip
 
           // Schedule async thunder readback: fence signals when GPU finishes this frame's work
           // The check at draw() start will read it next frame without any blocking stall
@@ -13240,7 +13243,7 @@ var soundingGraph = {
     });
   }
 
-  function adjIterPerFrame(adj) { guiControls.IterPerFrame = Math.round(clamp(guiControls.IterPerFrame + adj, 1, 50)); }
+  function adjIterPerFrame(adj) { guiControls.IterPerFrame = Math.round(clamp(guiControls.IterPerFrame + adj, 1, _largemap ? 2 : 50)); }
 
   function isPageHidden() { return document.hidden || document.msHidden || document.webkitHidden || document.mozHidden; }
 
