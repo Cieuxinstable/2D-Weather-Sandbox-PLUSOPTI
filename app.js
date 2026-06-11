@@ -11089,8 +11089,96 @@ var soundingGraph = {
     guiControls.exposure = clampNumber(guiControls.exposure, guiControls.autoExposureMin, guiControls.autoExposureMax);
 
     gl.useProgram(postProcessingProgram);
-    gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure);
+    gl.uniform1f(_uloc_postproc_exposure, guiControls.exposure);
   }
+
+  // ── Fix 19: Permanent uniform location caches ───────────────────────────
+  // Computed once at init; replaces 60–100+ gl.getUniformLocation string
+  // lookups per frame (bloom loop alone was ~40 calls/frame).
+  const _uloc_bloom_tex           = gl.getUniformLocation(bloomBlurProgram,            'bloomTexture');
+  const _uloc_bloom_texelSize     = gl.getUniformLocation(bloomBlurProgram,            'texelSize');
+  const _uloc_light_IR_rate       = gl.getUniformLocation(lightingProgram,             'IR_rate');
+  const _uloc_postproc_exposure   = gl.getUniformLocation(postProcessingProgram,       'exposure');
+  const _uloc_adv_userInputType    = gl.getUniformLocation(advectionProgram,           'userInputType');
+  const _uloc_adv_userInputValues  = gl.getUniformLocation(advectionProgram,           'userInputValues');
+  const _uloc_adv_userInputMove    = gl.getUniformLocation(advectionProgram,           'userInputMove');
+  const _uloc_adv_wrapHorizontally = gl.getUniformLocation(advectionProgram,           'wrapHorizontally');
+  const _uloc_vel_acCount  = gl.getUniformLocation(velocityProgram,                    'acWindCount');
+  const _uloc_vel_acData   = gl.getUniformLocation(velocityProgram,                    'acWindData[0]');
+  const _uloc_vel_acMoveX  = gl.getUniformLocation(velocityProgram,                    'acWindMoveX[0]');
+  const _uloc_vel_acRadX   = gl.getUniformLocation(velocityProgram,                    'acWindRadX[0]');
+  const _uloc_adv_acCount  = gl.getUniformLocation(advectionProgram,                   'acWindCount');
+  const _uloc_adv_acData   = gl.getUniformLocation(advectionProgram,                   'acWindData[0]');
+  const _uloc_adv_acMoveX  = gl.getUniformLocation(advectionProgram,                   'acWindMoveX[0]');
+  const _uloc_adv_acRadX   = gl.getUniformLocation(advectionProgram,                   'acWindRadX[0]');
+  const _uloc_precip_iter  = gl.getUniformLocation(precipitationProgram,               'iterNum');
+  const _uloc_lloc_iter    = gl.getUniformLocation(lightningLocationProgram,            'iterNum');
+  const _uloc_radar_mode   = gl.getUniformLocation(radarFieldUpdateProgram,             'fieldUpdateMode');
+  const _uloc_sky_aspectRatios = gl.getUniformLocation(skyBackgroundDisplayProgram,    'aspectRatios');
+  const _uloc_sky_view         = gl.getUniformLocation(skyBackgroundDisplayProgram,    'view');
+  const _uloc_sky_Xmult        = gl.getUniformLocation(skyBackgroundDisplayProgram,    'Xmult');
+  const _uloc_sky_iterNum      = gl.getUniformLocation(skyBackgroundDisplayProgram,    'iterNum');
+  const _uloc_real_aspectRatios       = gl.getUniformLocation(realisticDisplayProgram, 'aspectRatios');
+  const _uloc_real_view               = gl.getUniformLocation(realisticDisplayProgram, 'view');
+  const _uloc_real_cursor             = gl.getUniformLocation(realisticDisplayProgram, 'cursor');
+  const _uloc_real_Xmult              = gl.getUniformLocation(realisticDisplayProgram, 'Xmult');
+  const _uloc_real_iterNum            = gl.getUniformLocation(realisticDisplayProgram, 'iterNum');
+  const _uloc_real_lightningRate      = gl.getUniformLocation(realisticDisplayProgram, 'lightningRate');
+  const _uloc_real_displayVectorField = gl.getUniformLocation(realisticDisplayProgram, 'displayVectorField');
+  const _uloc_precipDisp_aspectRatios = gl.getUniformLocation(precipDisplayProgram,    'aspectRatios');
+  const _uloc_precipDisp_view         = gl.getUniformLocation(precipDisplayProgram,    'view');
+  const _uloc_precipDisp_mode         = gl.getUniformLocation(precipDisplayProgram,    'precipDisplayMode');
+  const _uloc_tempDisp_aspectRatios        = gl.getUniformLocation(temperatureDisplayProgram, 'aspectRatios');
+  const _uloc_tempDisp_view                = gl.getUniformLocation(temperatureDisplayProgram, 'view');
+  const _uloc_tempDisp_cursor              = gl.getUniformLocation(temperatureDisplayProgram, 'cursor');
+  const _uloc_tempDisp_Xmult              = gl.getUniformLocation(temperatureDisplayProgram, 'Xmult');
+  const _uloc_tempDisp_displayVectorField  = gl.getUniformLocation(temperatureDisplayProgram, 'displayVectorField');
+  const _uloc_aqDisp_aspectRatios = gl.getUniformLocation(airQualityDisplayProgram,   'aspectRatios');
+  const _uloc_aqDisp_view         = gl.getUniformLocation(airQualityDisplayProgram,   'view');
+  const _uloc_aqDisp_cursor       = gl.getUniformLocation(airQualityDisplayProgram,   'cursor');
+  const _uloc_aqDisp_Xmult        = gl.getUniformLocation(airQualityDisplayProgram,   'Xmult');
+  const _uloc_humDisp_aspectRatios = gl.getUniformLocation(humidityDisplayProgram,    'aspectRatios');
+  const _uloc_humDisp_view         = gl.getUniformLocation(humidityDisplayProgram,    'view');
+  const _uloc_humDisp_cursor       = gl.getUniformLocation(humidityDisplayProgram,    'cursor');
+  const _uloc_humDisp_Xmult        = gl.getUniformLocation(humidityDisplayProgram,    'Xmult');
+  const _uloc_irDisp_aspectRatios = gl.getUniformLocation(IRtempDisplayProgram,       'aspectRatios');
+  const _uloc_irDisp_view         = gl.getUniformLocation(IRtempDisplayProgram,       'view');
+  const _uloc_irDisp_cursor       = gl.getUniformLocation(IRtempDisplayProgram,       'cursor');
+  const _uloc_irDisp_upOrDown     = gl.getUniformLocation(IRtempDisplayProgram,       'upOrDown');
+  const _uloc_irDisp_Xmult        = gl.getUniformLocation(IRtempDisplayProgram,       'Xmult');
+  const _uloc_rhohv_aspectRatios       = gl.getUniformLocation(rhohvDisplayProgram,   'aspectRatios');
+  const _uloc_rhohv_view               = gl.getUniformLocation(rhohvDisplayProgram,   'view');
+  const _uloc_rhohv_cursor             = gl.getUniformLocation(rhohvDisplayProgram,   'cursor');
+  const _uloc_rhohv_Xmult              = gl.getUniformLocation(rhohvDisplayProgram,   'Xmult');
+  const _uloc_rhohv_binSize            = gl.getUniformLocation(rhohvDisplayProgram,   'binSize');
+  const _uloc_rhohv_radarRefreshTick   = gl.getUniformLocation(rhohvDisplayProgram,   'radarRefreshTick');
+  const _uloc_rhohv_showLowCCArtifacts = gl.getUniformLocation(rhohvDisplayProgram,   'showLowCCArtifacts');
+  const _uloc_rhohv_showRandomNoise    = gl.getUniformLocation(rhohvDisplayProgram,   'showRandomNoise');
+  const _uloc_rhohv_clutterDensity     = gl.getUniformLocation(rhohvDisplayProgram,   'clutterDensity');
+  const _uloc_rhohv_productAlpha       = gl.getUniformLocation(rhohvDisplayProgram,   'productAlpha');
+  const _uloc_rhohv_productOpaque      = gl.getUniformLocation(rhohvDisplayProgram,   'productOpaque');
+  const _uloc_zdr_aspectRatios     = gl.getUniformLocation(zdrDisplayProgram,         'aspectRatios');
+  const _uloc_zdr_view             = gl.getUniformLocation(zdrDisplayProgram,         'view');
+  const _uloc_zdr_cursor           = gl.getUniformLocation(zdrDisplayProgram,         'cursor');
+  const _uloc_zdr_Xmult            = gl.getUniformLocation(zdrDisplayProgram,         'Xmult');
+  const _uloc_zdr_binSize          = gl.getUniformLocation(zdrDisplayProgram,         'binSize');
+  const _uloc_zdr_radarRefreshTick = gl.getUniformLocation(zdrDisplayProgram,         'radarRefreshTick');
+  const _uloc_zdr_productAlpha     = gl.getUniformLocation(zdrDisplayProgram,         'productAlpha');
+  const _uloc_zdr_productOpaque    = gl.getUniformLocation(zdrDisplayProgram,         'productOpaque');
+  const _uloc_univDisp_aspectRatios     = gl.getUniformLocation(universalDisplayProgram, 'aspectRatios');
+  const _uloc_univDisp_view             = gl.getUniformLocation(universalDisplayProgram, 'view');
+  const _uloc_univDisp_cursor           = gl.getUniformLocation(universalDisplayProgram, 'cursor');
+  const _uloc_univDisp_Xmult            = gl.getUniformLocation(universalDisplayProgram, 'Xmult');
+  const _uloc_univDisp_reflectivityMode = gl.getUniformLocation(universalDisplayProgram, 'reflectivityMode');
+  const _uloc_univDisp_reflMult         = gl.getUniformLocation(universalDisplayProgram, 'reflMult');
+  const _uloc_univDisp_reflBoost        = gl.getUniformLocation(universalDisplayProgram, 'reflBoost');
+  const _uloc_univDisp_reflPixelSize    = gl.getUniformLocation(universalDisplayProgram, 'reflPixelSize');
+  const _uloc_univDisp_reflBackground   = gl.getUniformLocation(universalDisplayProgram, 'reflBackground');
+  const _uloc_univDisp_radarProduct     = gl.getUniformLocation(universalDisplayProgram, 'radarProduct');
+  const _uloc_univDisp_quantityIndex    = gl.getUniformLocation(universalDisplayProgram, 'quantityIndex');
+  const _uloc_univDisp_dispMultiplier   = gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier');
+  const _largemap = sim_res_x * sim_res_y > 4000000;
+  const _radarDbgBuf = new Float32Array(4);
 
   setInterval(calcFps, 1000); // log fps
   requestAnimationFrame(draw);
@@ -11329,11 +11417,11 @@ var soundingGraph = {
         let moveX = mouseXinSim - prevMouseXinSim;
         let moveY = mouseYinSim - prevMouseYinSim;
 
-        gl.uniform4f(gl.getUniformLocation(advectionProgram, 'userInputValues'), posXinSim, mouseYinSim, intensity, guiControls.brushSize * 0.5);
-        gl.uniform2f(gl.getUniformLocation(advectionProgram, 'userInputMove'), moveX, moveY);
-        gl.uniform1i(gl.getUniformLocation(advectionProgram, 'wrapHorizontally'), guiControls.wrapHorizontally);
+        gl.uniform4f(_uloc_adv_userInputValues, posXinSim, mouseYinSim, intensity, guiControls.brushSize * 0.5);
+        gl.uniform2f(_uloc_adv_userInputMove, moveX, moveY);
+        gl.uniform1i(_uloc_adv_wrapHorizontally, guiControls.wrapHorizontally);
       }
-      gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), inputType);
+      gl.uniform1i(_uloc_adv_userInputType, inputType);
 
       // guiControls.IterPerFrame = 1.0 / timePerIteration * 3600 / 60.0;
 
@@ -11351,7 +11439,7 @@ var soundingGraph = {
         }
 
         gl.useProgram(lightingProgram);
-        gl.uniform1f(gl.getUniformLocation(lightingProgram, 'IR_rate'), guiControls.IR_rate * (nightAccelerationActive ? 10.0 : 1.0));
+        gl.uniform1f(_uloc_light_IR_rate, guiControls.IR_rate * (nightAccelerationActive ? 10.0 : 1.0));
 
         gl.viewport(0, 0, sim_res_x, sim_res_y);
         gl.clearColor(0.0, 0.0, 0.0, 0.0);
@@ -11392,20 +11480,7 @@ var soundingGraph = {
             }
           }
 
-          // Cache uniform locations for hot loop (avoids ~12 hashmap lookups × numIterations)
-          const _uloc_vel_acCount = gl.getUniformLocation(velocityProgram,          'acWindCount');
-          const _uloc_vel_acData  = gl.getUniformLocation(velocityProgram,          'acWindData[0]');
-          const _uloc_vel_acMoveX = gl.getUniformLocation(velocityProgram,          'acWindMoveX[0]');
-          const _uloc_vel_acRadX  = gl.getUniformLocation(velocityProgram,          'acWindRadX[0]');
-          const _uloc_adv_acCount = gl.getUniformLocation(advectionProgram,         'acWindCount');
-          const _uloc_adv_acData  = gl.getUniformLocation(advectionProgram,         'acWindData[0]');
-          const _uloc_adv_acMoveX = gl.getUniformLocation(advectionProgram,         'acWindMoveX[0]');
-          const _uloc_adv_acRadX  = gl.getUniformLocation(advectionProgram,         'acWindRadX[0]');
-          const _uloc_precip_iter = gl.getUniformLocation(precipitationProgram,     'iterNum');
-          const _uloc_lloc_iter   = gl.getUniformLocation(lightningLocationProgram, 'iterNum');
-          const _uloc_radar_mode  = gl.getUniformLocation(radarFieldUpdateProgram,  'fieldUpdateMode');
-          // Large-map flag: skip precipitation on odd iterations to halve particle cost
-          const _largemap = sim_res_x * sim_res_y > 4000000;
+          // AC wind uniforms, precip/radar modes, _largemap: cached permanently above draw()
 
           for (var i = 0; i < numIterations; i++) { // Simulation loop
             // calc and apply velocity
@@ -11672,9 +11747,9 @@ var soundingGraph = {
 
     if (cursorType != 0 && !sunIsUp) {
       // working at night
-      gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), 2.0);
+      gl.uniform1f(_uloc_postproc_exposure, 2.0);
     } else {
-      gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure);
+      gl.uniform1f(_uloc_postproc_exposure, guiControls.exposure);
     }
 
     if (inputType == 0) {
@@ -11740,7 +11815,7 @@ var soundingGraph = {
       var simXposDbg = Math.floor(Math.abs(mod(mouseXinSim * sim_res_x, sim_res_x)));
       var simYposDbg = Math.min(Math.max(Math.floor(mouseYinSim * sim_res_y), 0), sim_res_y - 1);
 
-      var radarDbg = new Float32Array(4);
+      const radarDbg = _radarDbgBuf;
       if (guiControls.displayMode == 'DISP_REFLECTIVITY') {
         gl.bindFramebuffer(gl.FRAMEBUFFER, reflectivitySnapshotFBO);
         gl.readBuffer(gl.COLOR_ATTACHMENT0); // reflectivitySnapshotTex
@@ -11813,14 +11888,14 @@ var soundingGraph = {
         let prevFBO = emittedLightFBO; // the previous FBO
 
         gl.useProgram(bloomBlurProgram);
-        gl.uniform1i(gl.getUniformLocation(bloomBlurProgram, 'bloomTexture'), 0);
+        gl.uniform1i(_uloc_bloom_tex, 0);
 
         for (let blurTimes = 0; blurTimes < 2; blurTimes++) { // blur twice for smoother result
 
           // downsample
           for (let i = 1; i < ambientLightFBOs.length; i++) {
             let destFBO = ambientLightFBOs[i];
-            gl.uniform2f(gl.getUniformLocation(bloomBlurProgram, 'texelSize'), prevFBO.texelSizeX, prevFBO.texelSizeY);
+            gl.uniform2f(_uloc_bloom_texelSize, prevFBO.texelSizeX, prevFBO.texelSizeY);
 
             gl.viewport(0, 0, destFBO.width, destFBO.height);
 
@@ -11842,7 +11917,7 @@ var soundingGraph = {
           for (let i = ambientLightFBOs.length - 2; i >= 0; i--) {
             let destFBO = ambientLightFBOs[i];
 
-            gl.uniform2f(gl.getUniformLocation(bloomBlurProgram, 'texelSize'), prevFBO.texelSizeX, prevFBO.texelSizeY);
+            gl.uniform2f(_uloc_bloom_texelSize, prevFBO.texelSizeX, prevFBO.texelSizeY);
 
             gl.activeTexture(gl.TEXTURE0);
             gl.bindTexture(gl.TEXTURE_2D, prevFBO.texture);
@@ -11895,10 +11970,10 @@ var soundingGraph = {
       gl.bindTexture(gl.TEXTURE_2D, A380GearTexture);
 
       gl.useProgram(skyBackgroundDisplayProgram);
-      gl.uniform2f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-      gl.uniform3f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
-      gl.uniform1f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'Xmult'), horizontalDisplayMult);
-      gl.uniform1f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'iterNum'), iterNum);
+      gl.uniform2f(_uloc_sky_aspectRatios, sim_aspect, canvas_aspect);
+      gl.uniform3f(_uloc_sky_view, cam.curXpos, cam.curYpos, cam.curZoom);
+      gl.uniform1f(_uloc_sky_Xmult, horizontalDisplayMult);
+      gl.uniform1f(_uloc_sky_iterNum, iterNum);
 
       gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
 
@@ -11910,18 +11985,18 @@ var soundingGraph = {
 
       // draw clouds and terrain
       gl.useProgram(realisticDisplayProgram);
-      gl.uniform2f(gl.getUniformLocation(realisticDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-      gl.uniform3f(gl.getUniformLocation(realisticDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
-      gl.uniform4f(gl.getUniformLocation(realisticDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
-      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'Xmult'), horizontalDisplayMult);
-      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'iterNum'), iterNum);
-      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningRate'), guiControls.lightningEnabled === false ? 0.0 : (guiControls.lightningRate !== undefined ? guiControls.lightningRate : 1.0));
+      gl.uniform2f(_uloc_real_aspectRatios, sim_aspect, canvas_aspect);
+      gl.uniform3f(_uloc_real_view, cam.curXpos, cam.curYpos, cam.curZoom);
+      gl.uniform4f(_uloc_real_cursor, mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
+      gl.uniform1f(_uloc_real_Xmult, horizontalDisplayMult);
+      gl.uniform1f(_uloc_real_iterNum, iterNum);
+      gl.uniform1f(_uloc_real_lightningRate, guiControls.lightningEnabled === false ? 0.0 : (guiControls.lightningRate !== undefined ? guiControls.lightningRate : 1.0));
 
       // Don't display vectors when zoomed out because you would just see noise
       if (cam.curZoom / sim_res_x > 0.003) {
-        gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'displayVectorField'), displayVectorField);
+        gl.uniform1f(_uloc_real_displayVectorField, displayVectorField);
       } else {
-        gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'displayVectorField'), 0.0);
+        gl.uniform1f(_uloc_real_displayVectorField, 0.0);
       }
 
 
@@ -11966,13 +12041,13 @@ var soundingGraph = {
       let prevFBO = bloomFBOs[0]; // the previous FBO
 
       gl.useProgram(bloomBlurProgram);
-      gl.uniform1i(gl.getUniformLocation(bloomBlurProgram, 'bloomTexture'), 0);
+      gl.uniform1i(_uloc_bloom_tex, 0);
 
 
       // downsample
       for (let i = 1; i < bloomFBOs.length; i++) {
         let destFBO = bloomFBOs[i];
-        gl.uniform2f(gl.getUniformLocation(bloomBlurProgram, 'texelSize'), prevFBO.texelSizeX, prevFBO.texelSizeY);
+        gl.uniform2f(_uloc_bloom_texelSize, prevFBO.texelSizeX, prevFBO.texelSizeY);
 
         gl.viewport(0, 0, destFBO.width, destFBO.height);
 
@@ -11994,7 +12069,7 @@ var soundingGraph = {
       for (let i = bloomFBOs.length - 2; i >= 0; i--) {
         let destFBO = bloomFBOs[i];
 
-        gl.uniform2f(gl.getUniformLocation(bloomBlurProgram, 'texelSize'), prevFBO.texelSizeX, prevFBO.texelSizeY);
+        gl.uniform2f(_uloc_bloom_texelSize, prevFBO.texelSizeX, prevFBO.texelSizeY);
 
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, prevFBO.texture);
@@ -12019,7 +12094,7 @@ var soundingGraph = {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
       if (SETUP_MODE) {
-        gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), 50.0);
+        gl.uniform1f(_uloc_postproc_exposure, 50.0);
       }
 
       gl.bindFramebuffer(gl.FRAMEBUFFER, null); // null is canvas
@@ -12039,9 +12114,9 @@ var soundingGraph = {
         // draw drops over clouds
         // draw precipitation
         gl.useProgram(precipDisplayProgram);
-        gl.uniform2f(gl.getUniformLocation(precipDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(precipDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
-        gl.uniform1i(gl.getUniformLocation(precipDisplayProgram, 'precipDisplayMode'), 0);
+        gl.uniform2f(_uloc_precipDisp_aspectRatios, sim_aspect, canvas_aspect);
+        gl.uniform3f(_uloc_precipDisp_view, cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform1i(_uloc_precipDisp_mode, 0);
         gl.bindVertexArray(destVAO);
         gl.drawArrays(gl.POINTS, 0, NUM_DROPLETS);
         gl.bindVertexArray(fluidVao); // set screenfilling rect again
@@ -12067,9 +12142,9 @@ var soundingGraph = {
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         gl.useProgram(precipDisplayProgram);
-        gl.uniform2f(gl.getUniformLocation(precipDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(precipDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
-        gl.uniform1i(gl.getUniformLocation(precipDisplayProgram, 'precipDisplayMode'), 1);
+        gl.uniform2f(_uloc_precipDisp_aspectRatios, sim_aspect, canvas_aspect);
+        gl.uniform3f(_uloc_precipDisp_view, cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform1i(_uloc_precipDisp_mode, 1);
         gl.bindVertexArray(destVAO);
         gl.drawArrays(gl.POINTS, 0, NUM_DROPLETS);
         gl.bindVertexArray(fluidVao);
@@ -12078,68 +12153,68 @@ var soundingGraph = {
         setupPolarRadarDisplay(displayModeEffective, cursorType, getRadarProductBackground(displayModeEffective));
       } else if (displayModeEffective == 'DISP_TEMPERATURE') {
         gl.useProgram(temperatureDisplayProgram);
-        gl.uniform2f(gl.getUniformLocation(temperatureDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(temperatureDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
-        gl.uniform4f(gl.getUniformLocation(temperatureDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
-        gl.uniform1f(gl.getUniformLocation(temperatureDisplayProgram, 'Xmult'), horizontalDisplayMult);
+        gl.uniform2f(_uloc_tempDisp_aspectRatios, sim_aspect, canvas_aspect);
+        gl.uniform3f(_uloc_tempDisp_view, cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform4f(_uloc_tempDisp_cursor, mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
+        gl.uniform1f(_uloc_tempDisp_Xmult, horizontalDisplayMult);
 
 
         // Don't display vectors when zoomed out because you would just see
         // noise
         if (cam.curZoom / sim_res_x > 0.003) {
-          gl.uniform1f(gl.getUniformLocation(temperatureDisplayProgram, 'displayVectorField'), displayVectorField);
+          gl.uniform1f(_uloc_tempDisp_displayVectorField, displayVectorField);
         } else {
-          gl.uniform1f(gl.getUniformLocation(temperatureDisplayProgram, 'displayVectorField'), 0.0);
+          gl.uniform1f(_uloc_tempDisp_displayVectorField, 0.0);
         }
 
       } else if (displayModeEffective == 'DISP_AIRQUALITY') {
         gl.useProgram(airQualityDisplayProgram);
-        gl.uniform2f(gl.getUniformLocation(airQualityDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(airQualityDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
-        gl.uniform4f(gl.getUniformLocation(airQualityDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
-        gl.uniform1f(gl.getUniformLocation(airQualityDisplayProgram, 'Xmult'), horizontalDisplayMult);
+        gl.uniform2f(_uloc_aqDisp_aspectRatios, sim_aspect, canvas_aspect);
+        gl.uniform3f(_uloc_aqDisp_view, cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform4f(_uloc_aqDisp_cursor, mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
+        gl.uniform1f(_uloc_aqDisp_Xmult, horizontalDisplayMult);
 
       } else if (displayModeEffective == 'DISP_HUMD') {
         gl.useProgram(humidityDisplayProgram);
-        gl.uniform2f(gl.getUniformLocation(humidityDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(humidityDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
-        gl.uniform4f(gl.getUniformLocation(humidityDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
-        gl.uniform1f(gl.getUniformLocation(humidityDisplayProgram, 'Xmult'), horizontalDisplayMult);
+        gl.uniform2f(_uloc_humDisp_aspectRatios, sim_aspect, canvas_aspect);
+        gl.uniform3f(_uloc_humDisp_view, cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform4f(_uloc_humDisp_cursor, mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
+        gl.uniform1f(_uloc_humDisp_Xmult, horizontalDisplayMult);
 
       } else if (displayModeEffective == 'DISP_IRDOWNTEMP') {
         gl.useProgram(IRtempDisplayProgram);
-        gl.uniform2f(gl.getUniformLocation(IRtempDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(IRtempDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
-        gl.uniform4f(gl.getUniformLocation(IRtempDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
-        gl.uniform1i(gl.getUniformLocation(IRtempDisplayProgram, 'upOrDown'), 0);
-        gl.uniform1f(gl.getUniformLocation(IRtempDisplayProgram, 'Xmult'), horizontalDisplayMult);
+        gl.uniform2f(_uloc_irDisp_aspectRatios, sim_aspect, canvas_aspect);
+        gl.uniform3f(_uloc_irDisp_view, cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform4f(_uloc_irDisp_cursor, mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
+        gl.uniform1i(_uloc_irDisp_upOrDown, 0);
+        gl.uniform1f(_uloc_irDisp_Xmult, horizontalDisplayMult);
 
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, lightTexture_0);
       } else if (displayModeEffective == 'DISP_IRUPTEMP') {
         gl.useProgram(IRtempDisplayProgram);
-        gl.uniform2f(gl.getUniformLocation(IRtempDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(IRtempDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
-        gl.uniform4f(gl.getUniformLocation(IRtempDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
-        gl.uniform1i(gl.getUniformLocation(IRtempDisplayProgram, 'upOrDown'), 1);
-        gl.uniform1f(gl.getUniformLocation(IRtempDisplayProgram, 'Xmult'), horizontalDisplayMult);
+        gl.uniform2f(_uloc_irDisp_aspectRatios, sim_aspect, canvas_aspect);
+        gl.uniform3f(_uloc_irDisp_view, cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform4f(_uloc_irDisp_cursor, mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
+        gl.uniform1i(_uloc_irDisp_upOrDown, 1);
+        gl.uniform1f(_uloc_irDisp_Xmult, horizontalDisplayMult);
 
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, lightTexture_0);
       } else if (displayModeEffective == 'DISP_RHOHV') {
         gl.useProgram(rhohvDisplayProgram);
-        gl.uniform2f(gl.getUniformLocation(rhohvDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(rhohvDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
-        gl.uniform4f(gl.getUniformLocation(rhohvDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
-        gl.uniform1f(gl.getUniformLocation(rhohvDisplayProgram, 'Xmult'), horizontalDisplayMult);
+        gl.uniform2f(_uloc_rhohv_aspectRatios, sim_aspect, canvas_aspect);
+        gl.uniform3f(_uloc_rhohv_view, cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform4f(_uloc_rhohv_cursor, mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
+        gl.uniform1f(_uloc_rhohv_Xmult, horizontalDisplayMult);
         applyRadarPaletteUniforms(rhohvDisplayProgram, RADAR_PRODUCT_RHOHV);
-        gl.uniform1f(gl.getUniformLocation(rhohvDisplayProgram, 'binSize'), Math.max(1.0, Math.round(guiControls.rhohvPixelSize)));
-        gl.uniform1f(gl.getUniformLocation(rhohvDisplayProgram, 'radarRefreshTick'), radarRefreshNoiseTick);
-        gl.uniform1i(gl.getUniformLocation(rhohvDisplayProgram, 'showLowCCArtifacts'), guiControls.rhohvLowCCArtifacts ? 1 : 0);
-        gl.uniform1i(gl.getUniformLocation(rhohvDisplayProgram, 'showRandomNoise'), guiControls.rhohvRandomNoise ? 1 : 0);
-        gl.uniform1f(gl.getUniformLocation(rhohvDisplayProgram, 'clutterDensity'), guiControls.rhohvClutterDensity);
-        gl.uniform1f(gl.getUniformLocation(rhohvDisplayProgram, 'productAlpha'), 0.76);
-        gl.uniform1i(gl.getUniformLocation(rhohvDisplayProgram, 'productOpaque'), guiControls.rhohvBackground ? 1 : 0);
+        gl.uniform1f(_uloc_rhohv_binSize, Math.max(1.0, Math.round(guiControls.rhohvPixelSize)));
+        gl.uniform1f(_uloc_rhohv_radarRefreshTick, radarRefreshNoiseTick);
+        gl.uniform1i(_uloc_rhohv_showLowCCArtifacts, guiControls.rhohvLowCCArtifacts ? 1 : 0);
+        gl.uniform1i(_uloc_rhohv_showRandomNoise, guiControls.rhohvRandomNoise ? 1 : 0);
+        gl.uniform1f(_uloc_rhohv_clutterDensity, guiControls.rhohvClutterDensity);
+        gl.uniform1f(_uloc_rhohv_productAlpha, 0.76);
+        gl.uniform1i(_uloc_rhohv_productOpaque, guiControls.rhohvBackground ? 1 : 0);
         gl.activeTexture(gl.TEXTURE4);
         gl.bindTexture(gl.TEXTURE_2D, rhohvSnapshotTex);
         if (!guiControls.rhohvBackground) {
@@ -12148,15 +12223,15 @@ var soundingGraph = {
         }
       } else if (displayModeEffective == 'DISP_ZDR') {
         gl.useProgram(zdrDisplayProgram);
-        gl.uniform2f(gl.getUniformLocation(zdrDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(zdrDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
-        gl.uniform4f(gl.getUniformLocation(zdrDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
-        gl.uniform1f(gl.getUniformLocation(zdrDisplayProgram, 'Xmult'), horizontalDisplayMult);
+        gl.uniform2f(_uloc_zdr_aspectRatios, sim_aspect, canvas_aspect);
+        gl.uniform3f(_uloc_zdr_view, cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform4f(_uloc_zdr_cursor, mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
+        gl.uniform1f(_uloc_zdr_Xmult, horizontalDisplayMult);
         applyRadarPaletteUniforms(zdrDisplayProgram, RADAR_PRODUCT_ZDR);
-        gl.uniform1f(gl.getUniformLocation(zdrDisplayProgram, 'binSize'), Math.max(1.0, Math.round(guiControls.zdrPixelSize)));
-        gl.uniform1f(gl.getUniformLocation(zdrDisplayProgram, 'radarRefreshTick'), radarRefreshNoiseTick);
-        gl.uniform1f(gl.getUniformLocation(zdrDisplayProgram, 'productAlpha'), 0.76);
-        gl.uniform1i(gl.getUniformLocation(zdrDisplayProgram, 'productOpaque'), guiControls.zdrBackground ? 1 : 0);
+        gl.uniform1f(_uloc_zdr_binSize, Math.max(1.0, Math.round(guiControls.zdrPixelSize)));
+        gl.uniform1f(_uloc_zdr_radarRefreshTick, radarRefreshNoiseTick);
+        gl.uniform1f(_uloc_zdr_productAlpha, 0.76);
+        gl.uniform1i(_uloc_zdr_productOpaque, guiControls.zdrBackground ? 1 : 0);
         gl.activeTexture(gl.TEXTURE4);
         gl.bindTexture(gl.TEXTURE_2D, zdrSnapshotTex);
         if (!guiControls.zdrBackground) {
@@ -12165,33 +12240,33 @@ var soundingGraph = {
         }
       } else {
         gl.useProgram(universalDisplayProgram);
-        gl.uniform2f(gl.getUniformLocation(universalDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(universalDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
-        gl.uniform4f(gl.getUniformLocation(universalDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
-        gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'Xmult'), horizontalDisplayMult);
-        gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'reflectivityMode'), 0);
-        gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'reflMult'), 1.0);
+        gl.uniform2f(_uloc_univDisp_aspectRatios, sim_aspect, canvas_aspect);
+        gl.uniform3f(_uloc_univDisp_view, cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform4f(_uloc_univDisp_cursor, mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
+        gl.uniform1f(_uloc_univDisp_Xmult, horizontalDisplayMult);
+        gl.uniform1i(_uloc_univDisp_reflectivityMode, 0);
+        gl.uniform1f(_uloc_univDisp_reflMult, 1.0);
 
         switch (displayModeEffective) {
         case 'DISP_HORIVEL':
-          gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'quantityIndex'), 0);
-          gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier'), 10.0); // 20.0
+          gl.uniform1i(_uloc_univDisp_quantityIndex, 0);
+          gl.uniform1f(_uloc_univDisp_dispMultiplier, 10.0); // 20.0
           break;
         case 'DISP_VERTVEL':
-          gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'quantityIndex'), 1);
-          gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier'), 10.0); // 20.0
+          gl.uniform1i(_uloc_univDisp_quantityIndex, 1);
+          gl.uniform1f(_uloc_univDisp_dispMultiplier, 10.0); // 20.0
           break;
         case 'DISP_WATER':
           gl.activeTexture(gl.TEXTURE0);
           gl.bindTexture(gl.TEXTURE_2D, waterTexture_1);
-          gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'quantityIndex'), 0);
-          gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier'), -0.06); // negative number so positive amount is blue
+          gl.uniform1i(_uloc_univDisp_quantityIndex, 0);
+          gl.uniform1f(_uloc_univDisp_dispMultiplier, -0.06); // negative number so positive amount is blue
           break;
         case 'DISP_IRHEATING':
           gl.activeTexture(gl.TEXTURE0);
           gl.bindTexture(gl.TEXTURE_2D, lightTexture_0);
-          gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'quantityIndex'), 1);
-          gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier'), 50000.0);
+          gl.uniform1i(_uloc_univDisp_quantityIndex, 1);
+          gl.uniform1f(_uloc_univDisp_dispMultiplier, 50000.0);
           break;
         case 'DISP_REFLECTIVITY':
           gl.activeTexture(gl.TEXTURE0);
@@ -12204,15 +12279,15 @@ var soundingGraph = {
           gl.bindTexture(gl.TEXTURE_2D, phaseStatsSnapshotTex);
           gl.activeTexture(gl.TEXTURE7);
           gl.bindTexture(gl.TEXTURE_2D, radarMomentsTexture);
-        gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'quantityIndex'), 2); // unused in radar mode
-        gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier'), 1.0);
-        gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'reflectivityMode'), 1);
-        gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'radarProduct'), 0);
+        gl.uniform1i(_uloc_univDisp_quantityIndex, 2); // unused in radar mode
+        gl.uniform1f(_uloc_univDisp_dispMultiplier, 1.0);
+        gl.uniform1i(_uloc_univDisp_reflectivityMode, 1);
+        gl.uniform1i(_uloc_univDisp_radarProduct, 0);
         applyRadarPaletteUniforms(universalDisplayProgram, RADAR_PRODUCT_REFLECTIVITY);
-        gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'reflMult'), guiControls.reflectivityGain); // user gain
-        gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'reflBoost'), guiControls.reflectivityBoost);
-        gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'reflPixelSize'), guiControls.reflectivityPixelSize);
-        gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'reflBackground'), guiControls.reflectivityBackground ? 1 : 0);
+        gl.uniform1f(_uloc_univDisp_reflMult, guiControls.reflectivityGain); // user gain
+        gl.uniform1f(_uloc_univDisp_reflBoost, guiControls.reflectivityBoost);
+        gl.uniform1f(_uloc_univDisp_reflPixelSize, guiControls.reflectivityPixelSize);
+        gl.uniform1i(_uloc_univDisp_reflBackground, guiControls.reflectivityBackground ? 1 : 0);
         if (!guiControls.reflectivityBackground) {
           gl.enable(gl.BLEND);
           gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -12227,15 +12302,15 @@ var soundingGraph = {
           gl.bindTexture(gl.TEXTURE_2D, echoColumnProductsSnapshotTex);
           gl.activeTexture(gl.TEXTURE2);
           gl.bindTexture(gl.TEXTURE_2D, wallTexture_1);
-          gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'quantityIndex'), 2);
-          gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier'), 1.0);
-          gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'reflectivityMode'), 1);
-          gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'radarProduct'), getEchoColumnRadarProductMode(displayModeEffective));
+          gl.uniform1i(_uloc_univDisp_quantityIndex, 2);
+          gl.uniform1f(_uloc_univDisp_dispMultiplier, 1.0);
+          gl.uniform1i(_uloc_univDisp_reflectivityMode, 1);
+          gl.uniform1i(_uloc_univDisp_radarProduct, getEchoColumnRadarProductMode(displayModeEffective));
           applyRadarPaletteUniforms(universalDisplayProgram, getEchoColumnRadarProductPalette(displayModeEffective));
-          gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'reflMult'), guiControls.reflectivityGain);
-          gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'reflBoost'), guiControls.reflectivityBoost);
-          gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'reflPixelSize'), guiControls.reflectivityPixelSize);
-          gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'reflBackground'), guiControls.reflectivityBackground ? 1 : 0);
+          gl.uniform1f(_uloc_univDisp_reflMult, guiControls.reflectivityGain);
+          gl.uniform1f(_uloc_univDisp_reflBoost, guiControls.reflectivityBoost);
+          gl.uniform1f(_uloc_univDisp_reflPixelSize, guiControls.reflectivityPixelSize);
+          gl.uniform1i(_uloc_univDisp_reflBackground, guiControls.reflectivityBackground ? 1 : 0);
           if (!guiControls.reflectivityBackground) {
             gl.enable(gl.BLEND);
             gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -12244,44 +12319,44 @@ var soundingGraph = {
         case 'DISP_PRECIPFEEDBACK_MASS':
           gl.activeTexture(gl.TEXTURE0);
           gl.bindTexture(gl.TEXTURE_2D, precipitationFeedbackTexture);
-          gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'quantityIndex'), 0);
-          gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier'), 0.3);
+          gl.uniform1i(_uloc_univDisp_quantityIndex, 0);
+          gl.uniform1f(_uloc_univDisp_dispMultiplier, 0.3);
           break;
         case 'DISP_PRECIPFEEDBACK_HEAT':
           gl.activeTexture(gl.TEXTURE0);
           gl.bindTexture(gl.TEXTURE_2D, precipitationFeedbackTexture);
-          gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'quantityIndex'), 1);
-          gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier'), 500.0);
+          gl.uniform1i(_uloc_univDisp_quantityIndex, 1);
+          gl.uniform1f(_uloc_univDisp_dispMultiplier, 500.0);
           break;
         case 'DISP_PRECIPFEEDBACK_VAPOR':
           gl.activeTexture(gl.TEXTURE0);
           gl.bindTexture(gl.TEXTURE_2D, precipitationFeedbackTexture);
-          gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'quantityIndex'), 2);
-          gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier'), 500.0);
+          gl.uniform1i(_uloc_univDisp_quantityIndex, 2);
+          gl.uniform1f(_uloc_univDisp_dispMultiplier, 500.0);
           break;
         case 'DISP_PRECIPFEEDBACK_RAIN':
           gl.activeTexture(gl.TEXTURE0);
           gl.bindTexture(gl.TEXTURE_2D, precipitationDepositionTexture);
-          gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'quantityIndex'), 0);
-          gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier'), 1.0);
+          gl.uniform1i(_uloc_univDisp_quantityIndex, 0);
+          gl.uniform1f(_uloc_univDisp_dispMultiplier, 1.0);
           break;
         case 'DISP_PRECIPFEEDBACK_SNOW':
           gl.activeTexture(gl.TEXTURE0);
           gl.bindTexture(gl.TEXTURE_2D, precipitationDepositionTexture);
-          gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'quantityIndex'), 1);
-          gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier'), 1.0);
+          gl.uniform1i(_uloc_univDisp_quantityIndex, 1);
+          gl.uniform1f(_uloc_univDisp_dispMultiplier, 1.0);
           break;
         case 'DISP_SOIL_MOISTURE':
           gl.activeTexture(gl.TEXTURE0);
           gl.bindTexture(gl.TEXTURE_2D, waterTexture_0);
-          gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'quantityIndex'), 2);
-          gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier'), 0.02);
+          gl.uniform1i(_uloc_univDisp_quantityIndex, 2);
+          gl.uniform1f(_uloc_univDisp_dispMultiplier, 0.02);
           break;
         case 'DISP_CURL':
           gl.activeTexture(gl.TEXTURE0);
           gl.bindTexture(gl.TEXTURE_2D, curlTexture);
-          gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'quantityIndex'), 0);
-          gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier'), 7.0);
+          gl.uniform1i(_uloc_univDisp_quantityIndex, 0);
+          gl.uniform1f(_uloc_univDisp_dispMultiplier, 7.0);
           break;
         }
       }
@@ -12298,18 +12373,18 @@ var soundingGraph = {
         setupPolarRadarDisplay(guiControls.displayMode, cursorType, false);
       } else if (guiControls.displayMode == 'DISP_REFLECTIVITY') {
         gl.useProgram(universalDisplayProgram);
-        gl.uniform2f(gl.getUniformLocation(universalDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(universalDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
-        gl.uniform4f(gl.getUniformLocation(universalDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
-        gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'Xmult'), horizontalDisplayMult);
-        gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'reflectivityMode'), 1);
-        gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'reflMult'), guiControls.reflectivityGain);
-        gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'reflBoost'), guiControls.reflectivityBoost);
-        gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'reflPixelSize'), guiControls.reflectivityPixelSize);
-        gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'reflBackground'), guiControls.reflectivityBackground ? 1 : 0);
-        gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'radarProduct'), 0);
-        gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'quantityIndex'), 2);
-        gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier'), 1.0);
+        gl.uniform2f(_uloc_univDisp_aspectRatios, sim_aspect, canvas_aspect);
+        gl.uniform3f(_uloc_univDisp_view, cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform4f(_uloc_univDisp_cursor, mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
+        gl.uniform1f(_uloc_univDisp_Xmult, horizontalDisplayMult);
+        gl.uniform1i(_uloc_univDisp_reflectivityMode, 1);
+        gl.uniform1f(_uloc_univDisp_reflMult, guiControls.reflectivityGain);
+        gl.uniform1f(_uloc_univDisp_reflBoost, guiControls.reflectivityBoost);
+        gl.uniform1f(_uloc_univDisp_reflPixelSize, guiControls.reflectivityPixelSize);
+        gl.uniform1i(_uloc_univDisp_reflBackground, guiControls.reflectivityBackground ? 1 : 0);
+        gl.uniform1i(_uloc_univDisp_radarProduct, 0);
+        gl.uniform1i(_uloc_univDisp_quantityIndex, 2);
+        gl.uniform1f(_uloc_univDisp_dispMultiplier, 1.0);
         applyRadarPaletteUniforms(universalDisplayProgram, RADAR_PRODUCT_REFLECTIVITY);
 
         gl.activeTexture(gl.TEXTURE0);
@@ -12326,18 +12401,18 @@ var soundingGraph = {
         gl.bindTexture(gl.TEXTURE_2D, wallTexture_1);
       } else if (getEchoColumnRadarProductMode(guiControls.displayMode) >= 0) {
         gl.useProgram(universalDisplayProgram);
-        gl.uniform2f(gl.getUniformLocation(universalDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(universalDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
-        gl.uniform4f(gl.getUniformLocation(universalDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
-        gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'Xmult'), horizontalDisplayMult);
-        gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'reflectivityMode'), 1);
-        gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'reflMult'), guiControls.reflectivityGain);
-        gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'reflBoost'), guiControls.reflectivityBoost);
-        gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'reflPixelSize'), guiControls.reflectivityPixelSize);
-        gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'reflBackground'), 0);
-        gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'radarProduct'), getEchoColumnRadarProductMode(guiControls.displayMode));
-        gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'quantityIndex'), 2);
-        gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier'), 1.0);
+        gl.uniform2f(_uloc_univDisp_aspectRatios, sim_aspect, canvas_aspect);
+        gl.uniform3f(_uloc_univDisp_view, cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform4f(_uloc_univDisp_cursor, mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
+        gl.uniform1f(_uloc_univDisp_Xmult, horizontalDisplayMult);
+        gl.uniform1i(_uloc_univDisp_reflectivityMode, 1);
+        gl.uniform1f(_uloc_univDisp_reflMult, guiControls.reflectivityGain);
+        gl.uniform1f(_uloc_univDisp_reflBoost, guiControls.reflectivityBoost);
+        gl.uniform1f(_uloc_univDisp_reflPixelSize, guiControls.reflectivityPixelSize);
+        gl.uniform1i(_uloc_univDisp_reflBackground, 0);
+        gl.uniform1i(_uloc_univDisp_radarProduct, getEchoColumnRadarProductMode(guiControls.displayMode));
+        gl.uniform1i(_uloc_univDisp_quantityIndex, 2);
+        gl.uniform1f(_uloc_univDisp_dispMultiplier, 1.0);
         applyRadarPaletteUniforms(universalDisplayProgram, getEchoColumnRadarProductPalette(guiControls.displayMode));
 
         gl.activeTexture(gl.TEXTURE0);
@@ -12348,31 +12423,31 @@ var soundingGraph = {
         gl.bindTexture(gl.TEXTURE_2D, wallTexture_1);
       } else if (guiControls.displayMode == 'DISP_RHOHV') {
         gl.useProgram(rhohvDisplayProgram);
-        gl.uniform2f(gl.getUniformLocation(rhohvDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(rhohvDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
-        gl.uniform4f(gl.getUniformLocation(rhohvDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
-        gl.uniform1f(gl.getUniformLocation(rhohvDisplayProgram, 'Xmult'), horizontalDisplayMult);
+        gl.uniform2f(_uloc_rhohv_aspectRatios, sim_aspect, canvas_aspect);
+        gl.uniform3f(_uloc_rhohv_view, cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform4f(_uloc_rhohv_cursor, mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
+        gl.uniform1f(_uloc_rhohv_Xmult, horizontalDisplayMult);
         applyRadarPaletteUniforms(rhohvDisplayProgram, RADAR_PRODUCT_RHOHV);
-        gl.uniform1f(gl.getUniformLocation(rhohvDisplayProgram, 'binSize'), Math.max(1.0, Math.round(guiControls.rhohvPixelSize)));
-        gl.uniform1f(gl.getUniformLocation(rhohvDisplayProgram, 'radarRefreshTick'), radarRefreshNoiseTick);
-        gl.uniform1i(gl.getUniformLocation(rhohvDisplayProgram, 'showLowCCArtifacts'), guiControls.rhohvLowCCArtifacts ? 1 : 0);
-        gl.uniform1i(gl.getUniformLocation(rhohvDisplayProgram, 'showRandomNoise'), guiControls.rhohvRandomNoise ? 1 : 0);
-        gl.uniform1f(gl.getUniformLocation(rhohvDisplayProgram, 'clutterDensity'), guiControls.rhohvClutterDensity);
-        gl.uniform1f(gl.getUniformLocation(rhohvDisplayProgram, 'productAlpha'), 0.76);
-        gl.uniform1i(gl.getUniformLocation(rhohvDisplayProgram, 'productOpaque'), 0);
+        gl.uniform1f(_uloc_rhohv_binSize, Math.max(1.0, Math.round(guiControls.rhohvPixelSize)));
+        gl.uniform1f(_uloc_rhohv_radarRefreshTick, radarRefreshNoiseTick);
+        gl.uniform1i(_uloc_rhohv_showLowCCArtifacts, guiControls.rhohvLowCCArtifacts ? 1 : 0);
+        gl.uniform1i(_uloc_rhohv_showRandomNoise, guiControls.rhohvRandomNoise ? 1 : 0);
+        gl.uniform1f(_uloc_rhohv_clutterDensity, guiControls.rhohvClutterDensity);
+        gl.uniform1f(_uloc_rhohv_productAlpha, 0.76);
+        gl.uniform1i(_uloc_rhohv_productOpaque, 0);
         gl.activeTexture(gl.TEXTURE4);
         gl.bindTexture(gl.TEXTURE_2D, rhohvSnapshotTex);
       } else {
         gl.useProgram(zdrDisplayProgram);
-        gl.uniform2f(gl.getUniformLocation(zdrDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(zdrDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
-        gl.uniform4f(gl.getUniformLocation(zdrDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
-        gl.uniform1f(gl.getUniformLocation(zdrDisplayProgram, 'Xmult'), horizontalDisplayMult);
+        gl.uniform2f(_uloc_zdr_aspectRatios, sim_aspect, canvas_aspect);
+        gl.uniform3f(_uloc_zdr_view, cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform4f(_uloc_zdr_cursor, mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
+        gl.uniform1f(_uloc_zdr_Xmult, horizontalDisplayMult);
         applyRadarPaletteUniforms(zdrDisplayProgram, RADAR_PRODUCT_ZDR);
-        gl.uniform1f(gl.getUniformLocation(zdrDisplayProgram, 'binSize'), Math.max(1.0, Math.round(guiControls.zdrPixelSize)));
-        gl.uniform1f(gl.getUniformLocation(zdrDisplayProgram, 'radarRefreshTick'), radarRefreshNoiseTick);
-        gl.uniform1f(gl.getUniformLocation(zdrDisplayProgram, 'productAlpha'), 0.76);
-        gl.uniform1i(gl.getUniformLocation(zdrDisplayProgram, 'productOpaque'), 0);
+        gl.uniform1f(_uloc_zdr_binSize, Math.max(1.0, Math.round(guiControls.zdrPixelSize)));
+        gl.uniform1f(_uloc_zdr_radarRefreshTick, radarRefreshNoiseTick);
+        gl.uniform1f(_uloc_zdr_productAlpha, 0.76);
+        gl.uniform1i(_uloc_zdr_productOpaque, 0);
         gl.activeTexture(gl.TEXTURE4);
         gl.bindTexture(gl.TEXTURE_2D, zdrSnapshotTex);
       }
