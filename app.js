@@ -11880,7 +11880,7 @@ var soundingGraph = {
 
     if (displayModeEffective == 'DISP_REAL') {
 
-      { //  Abient Light Calculation
+      if (!_largemap || frameNum % 2 === 0) { // Ambient light: skip odd frames on large maps (emittedLightFBO is 12000×600 — expensive first downsample)
         gl.bindVertexArray(postProcessingVao);
 
         gl.bindFramebuffer(gl.FRAMEBUFFER, ambientLightFBOs[0].frameBuffer);
