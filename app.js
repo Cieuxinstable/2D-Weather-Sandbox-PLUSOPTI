@@ -8126,6 +8126,11 @@ function ensureSoundingPanel()
 var soundingGraph = {
     graphCanvas : null,
     ctx : null,
+    _baseColBuf  : null,
+    _waterColBuf : null,
+    _tempBaseBuf : null,
+    _tempWaterBuf: null,
+    _wallColBuf  : null,
   init : function() {
       ensureSoundingPanel();
       this.graphCanvas = document.getElementById('graphCanvas');
@@ -8149,8 +8154,21 @@ var soundingGraph = {
 
       gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_1);
       // Read sounding columns; optionally smooth horizontally (Gaussian weights ±2 cols)
-      var baseTextureValues = new Float32Array(4 * sim_res_y);
-      var waterTextureValues = new Float32Array(4 * sim_res_y);
+      // Pre-allocate/resize persistent buffers to avoid per-frame GC pressure
+      const _sColLen = 4 * sim_res_y;
+      if (!this._baseColBuf   || this._baseColBuf.length   !== _sColLen) this._baseColBuf   = new Float32Array(_sColLen);
+      if (!this._waterColBuf  || this._waterColBuf.length  !== _sColLen) this._waterColBuf  = new Float32Array(_sColLen);
+      if (!this._tempBaseBuf  || this._tempBaseBuf.length  !== _sColLen) this._tempBaseBuf  = new Float32Array(_sColLen);
+      if (!this._tempWaterBuf || this._tempWaterBuf.length !== _sColLen) this._tempWaterBuf = new Float32Array(_sColLen);
+      if (!this._wallColBuf   || this._wallColBuf.length   !== _sColLen) this._wallColBuf   = new Int32Array(_sColLen);
+
+      const baseTextureValues  = this._baseColBuf;
+      const waterTextureValues = this._waterColBuf;
+      const tempBase  = this._tempBaseBuf;
+      const tempWater = this._tempWaterBuf;
+      baseTextureValues.fill(0);
+      waterTextureValues.fill(0);
+
       const radius = guiControls.soundingSmoothing ? 2 : 0;
       const weights = [1, 4, 6, 4, 1];
       let weightSum = 0;
@@ -8159,7 +8177,6 @@ var soundingGraph = {
       for (let dx = -radius; dx <= radius; dx++) {
         const w = guiControls.soundingSmoothing ? weights[dx + radius] : 1;
         const col = clamp(simXpos + dx, 0, sim_res_x - 1);
-        var tempBase = new Float32Array(4 * sim_res_y);
         gl.readPixels(col, 0, 1, sim_res_y, gl.RGBA, gl.FLOAT, tempBase);
         for (let i = 0; i < tempBase.length; i++) baseTextureValues[i] += tempBase[i] * w;
         weightSum += w;
@@ -8169,7 +8186,6 @@ var soundingGraph = {
       for (let dx = -radius; dx <= radius; dx++) {
         const w = guiControls.soundingSmoothing ? weights[dx + radius] : 1;
         const col = clamp(simXpos + dx, 0, sim_res_x - 1);
-        var tempWater = new Float32Array(4 * sim_res_y);
         gl.readPixels(col, 0, 1, sim_res_y, gl.RGBA, gl.FLOAT, tempWater);
         for (let i = 0; i < tempWater.length; i++) waterTextureValues[i] += tempWater[i] * w;
       }
@@ -8179,7 +8195,7 @@ var soundingGraph = {
       }
 
       gl.readBuffer(gl.COLOR_ATTACHMENT2);
-      var wallTextureValues = new Int32Array(4 * sim_res_y);
+      const wallTextureValues = this._wallColBuf;
       gl.readPixels(simXpos, 0, 1, sim_res_y, gl.RGBA_INTEGER, gl.INT, wallTextureValues); // read a vertical column of cells
 
       function envTempKAt(y)
@@ -9594,6 +9610,8 @@ var soundingGraph = {
   const compactnessAttribLocation = 4;
   const dropletStrideBytes = valsPerDroplet * Float32Array.BYTES_PER_ELEMENT;
 
+  _uloc_precip_inactiveDroplets = gl.getUniformLocation(precipitationProgram, 'inactiveDroplets');
+
   var even = true; // used to switch between precipitation buffers
   // Async thunder readback: GPU fence so readPixels never blocks the main loop
   let _thunderSyncFence = null;
@@ -9607,6 +9625,8 @@ var soundingGraph = {
   // Persistent readback buffers: avoids Float32Array(4) allocation on every fence completion
   const _thunderReadBuf  = new Float32Array(4);
   const _dropletReadBuf  = new Float32Array(4);
+  // Cached uniform location for droplet readback (used inside fence handler, outside hot loop)
+  let _uloc_precip_inactiveDroplets = null;
 
   const precipitationVao_0 = gl.createVertexArray();
   const precipVertexBuffer_0 = gl.createBuffer();
@@ -11028,7 +11048,9 @@ var soundingGraph = {
     if (cursorType != 0 && !sunIsUp)
       return;
 
-    if (frameNum - autoExposureLastSampleFrame < AUTO_EXPOSURE_SAMPLE_INTERVAL_FRAMES)
+    // Large maps: sample less frequently — back-buffer readPixels stalls the full GPU pipeline
+    const _autoExpInterval = sim_res_x * sim_res_y > 4000000 ? 60 : AUTO_EXPOSURE_SAMPLE_INTERVAL_FRAMES;
+    if (frameNum - autoExposureLastSampleFrame < _autoExpInterval)
       return;
 
     const sampleWidth = Math.min(AUTO_EXPOSURE_SAMPLE_WIDTH, canvas.width);
@@ -11111,7 +11133,7 @@ var soundingGraph = {
         const _dropBuf = _dropletReadBuf;
         guiControls.inactiveDroplets = _dropBuf[0];
         gl.useProgram(precipitationProgram);
-        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'inactiveDroplets'), _dropBuf[0]);
+        gl.uniform1f(_uloc_precip_inactiveDroplets, _dropBuf[0]);
       } else if (_dsFence === gl.WAIT_FAILED) {
         gl.deleteSync(_dropletSyncFence);
         _dropletSyncFence = null;
@@ -11539,8 +11561,10 @@ var soundingGraph = {
               gl.drawArrays(gl.POINTS, 0, NUM_DROPLETS);
               gl.endTransformFeedback();
 
-              // Schedule async inactive droplet readback every ~5s (fence checked next frame, no stall)
-              if (i == 0 && frameNum % 300 == 0 && !_dropletSyncFence) {
+              // Schedule async inactive droplet readback: every 5s on small maps, 30s on large maps
+              // (large maps: reading from full-res precipitationFeedbackFrameBuff stalls the full GPU pipeline)
+              const _dropletInterval = _largemap ? 1800 : 300;
+              if (i == 0 && frameNum % _dropletInterval === 0 && !_dropletSyncFence) {
                 _dropletSyncFence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
               }
 
