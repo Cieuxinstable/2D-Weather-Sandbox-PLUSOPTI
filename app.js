@@ -11542,7 +11542,6 @@ var soundingGraph = {
               // Schedule async inactive droplet readback every ~5s (fence checked next frame, no stall)
               if (i == 0 && frameNum % 300 == 0 && !_dropletSyncFence) {
                 _dropletSyncFence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
-                gl.flush();
               }
 
               gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
@@ -11616,7 +11615,6 @@ var soundingGraph = {
           // The check at draw() start will read it next frame without any blocking stall
           if (guiControls.enablePrecipitation && guiControls.lightningEnabled !== false && guiControls.sound && !_thunderSyncFence) {
             _thunderSyncFence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
-            gl.flush();
           }
         }
 
@@ -12401,6 +12399,10 @@ var soundingGraph = {
   let cinColumnValues  = null;
   let capeColumnXs     = null;
   let lastCapeFrame    = -999;
+  let _capeRollingIdx  = 0;
+  let _capeBaseColBuf  = null;
+  let _capeWaterColBuf = null;
+  let _capeWallColBuf  = null;
   const CAPE_RECOMPUTE_INTERVAL = 4;
   const NUM_CAPE_SAMPLES = 80;
 
@@ -12481,7 +12483,7 @@ var soundingGraph = {
     }
   }
 
-  function computeCapeColumns() {
+  function computeCapeColumns(startSi, endSi) {
     // On large maps: fewer columns = far fewer GPU readPixels stalls (each column = 3 sync stalls)
     const _capeSamples = sim_res_x * sim_res_y > 4000000 ? 20 : NUM_CAPE_SAMPLES;
     const step   = Math.max(1, Math.floor(sim_res_x / _capeSamples));
@@ -12491,22 +12493,35 @@ var soundingGraph = {
       capeColumnValues = new Float32Array(actualN);
       cinColumnValues  = new Float32Array(actualN);
       capeColumnXs     = new Int32Array(actualN);
+      // Pre-compute column X positions once
+      for (let si = 0; si < actualN; si++) {
+        capeColumnXs[si] = Math.min(si * step, sim_res_x - 1);
+      }
+      _capeRollingIdx = 0;
     }
+
+    // Pre-allocate column read buffers once (reuse across calls)
+    const bufLen = 4 * sim_res_y;
+    if (!_capeBaseColBuf  || _capeBaseColBuf.length  !== bufLen) _capeBaseColBuf  = new Float32Array(bufLen);
+    if (!_capeWaterColBuf || _capeWaterColBuf.length !== bufLen) _capeWaterColBuf = new Float32Array(bufLen);
+    if (!_capeWallColBuf  || _capeWallColBuf.length  !== bufLen) _capeWallColBuf  = new Int32Array(bufLen);
+
+    const baseCol  = _capeBaseColBuf;
+    const waterCol = _capeWaterColBuf;
+    const wallCol  = _capeWallColBuf;
+
+    const si0 = startSi !== undefined ? startSi : 0;
+    const si1 = endSi   !== undefined ? Math.min(endSi, actualN) : actualN;
 
     const drylapsePerCell = ((-1.0 / sim_res_y) * guiControls.simHeight * guiControls.dryLapseRate) / 1000.0;
     const cellH = guiControls.simHeight / sim_res_y;
     const g = 9.81;
     const minMeaningfulCape = 1.0;
 
-    const baseCol  = new Float32Array(4 * sim_res_y);
-    const waterCol = new Float32Array(4 * sim_res_y);
-    const wallCol  = new Int32Array(4 * sim_res_y);
-
     gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_1);
 
-    for (let si = 0; si < actualN; si++) {
-      const x = Math.min(si * step, sim_res_x - 1);
-      capeColumnXs[si] = x;
+    for (let si = si0; si < si1; si++) {
+      const x = capeColumnXs[si];
 
       gl.readBuffer(gl.COLOR_ATTACHMENT0);
       gl.readPixels(x, 0, 1, sim_res_y, gl.RGBA, gl.FLOAT, baseCol);
@@ -12580,11 +12595,22 @@ var soundingGraph = {
     if (capeCanvas.width !== W)  capeCanvas.width  = W;
     if (capeCanvas.height !== H) capeCanvas.height = H;
 
-    // Recompute CAPE values: throttle heavily on large maps (each column = 3 GPU readPixels stalls)
-    const _capeInterval = sim_res_x * sim_res_y > 4000000 ? 120 : CAPE_RECOMPUTE_INTERVAL;
-    if (frameNum - lastCapeFrame >= _capeInterval) {
-      computeCapeColumns();
-      lastCapeFrame = frameNum;
+    // Recompute CAPE values
+    // Large maps: roll 2 columns per frame — spreads 6 readPixels over many frames instead of 60 in one spike frame
+    // Small maps: recompute all columns every few frames (cheap enough)
+    if (sim_res_x * sim_res_y > 4000000) {
+      const _capeSamples = 20;
+      const step    = Math.max(1, Math.floor(sim_res_x / _capeSamples));
+      const actualN = Math.ceil(sim_res_x / step);
+      const si0 = _capeRollingIdx % actualN;
+      const si1 = Math.min(si0 + 2, actualN);
+      computeCapeColumns(si0, si1);
+      _capeRollingIdx = si1 >= actualN ? 0 : si1;
+    } else {
+      if (frameNum - lastCapeFrame >= CAPE_RECOMPUTE_INTERVAL) {
+        computeCapeColumns();
+        lastCapeFrame = frameNum;
+      }
     }
 
     capeCtx.clearRect(0, 0, W, H);
