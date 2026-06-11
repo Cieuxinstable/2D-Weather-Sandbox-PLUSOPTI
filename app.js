@@ -9610,7 +9610,7 @@ var soundingGraph = {
   const compactnessAttribLocation = 4;
   const dropletStrideBytes = valsPerDroplet * Float32Array.BYTES_PER_ELEMENT;
 
-  _uloc_precip_inactiveDroplets = gl.getUniformLocation(precipitationProgram, 'inactiveDroplets');
+  let _uloc_precip_inactiveDroplets = gl.getUniformLocation(precipitationProgram, 'inactiveDroplets');
 
   var even = true; // used to switch between precipitation buffers
   // Async thunder readback: GPU fence so readPixels never blocks the main loop
@@ -9625,8 +9625,6 @@ var soundingGraph = {
   // Persistent readback buffers: avoids Float32Array(4) allocation on every fence completion
   const _thunderReadBuf  = new Float32Array(4);
   const _dropletReadBuf  = new Float32Array(4);
-  // Cached uniform location for droplet readback (used inside fence handler, outside hot loop)
-  let _uloc_precip_inactiveDroplets = null;
 
   const precipitationVao_0 = gl.createVertexArray();
   const precipVertexBuffer_0 = gl.createBuffer();
