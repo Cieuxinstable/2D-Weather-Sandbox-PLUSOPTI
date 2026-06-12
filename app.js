@@ -12609,9 +12609,13 @@ var soundingGraph = {
 
   // ── Update + Draw action centers (H/L circles) ─────────────────────────
   const nowAC = performance.now ? performance.now() : Date.now();
-  const dtAC  = lastACUpdateTime > 0 ? Math.min(nowAC - lastACUpdateTime, 100) : 16;
+  if (lastACUpdateTime > 0) acAccumulator += Math.min(nowAC - lastACUpdateTime, 200);
   lastACUpdateTime = nowAC;
-  if (!guiControls.paused) updateActionCenters(dtAC);
+  if (!guiControls.paused) {
+    while (acAccumulator >= 5) { updateActionCenters(5); acAccumulator -= 5; }
+  } else {
+    acAccumulator = 0;
+  }
   drawActionCenters();
   drawCapeOverlayIfActive();
 
@@ -12652,6 +12656,7 @@ var soundingGraph = {
   let actionCenterCanvas = null;
   let actionCenterCtx    = null;
   let lastACUpdateTime   = 0;
+  let acAccumulator      = 0;
 
   // Index du centre sélectionné (dernier placé par défaut)
   let selectedACIndex = -1;
@@ -12933,6 +12938,8 @@ var soundingGraph = {
     actionCenterCanvas.style.top           = '0px';
     actionCenterCanvas.style.zIndex        = '1';
     actionCenterCanvas.style.pointerEvents = 'none';
+    actionCenterCanvas.style.willChange    = 'contents';
+    actionCenterCanvas.style.transform     = 'translateZ(0)';
     document.body.appendChild(actionCenterCanvas);
     actionCenterCtx = actionCenterCanvas.getContext('2d');
   }
