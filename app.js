@@ -12970,7 +12970,7 @@ var soundingGraph = {
 
       // ── Déplacement du centre ──────────────────────────────────────────
       if (moveSpeed !== 0) {
-        const speedPerMs = Math.abs(moveSpeed) * 0.00001;
+        const speedPerMs = Math.abs(moveSpeed) * 0.000003;
         ac.x = mod(ac.x + (moveSpeed > 0 ? 1 : -1) * speedPerMs * dt, 1.0);
       }
 
@@ -13021,7 +13021,7 @@ var soundingGraph = {
       // Interpolate between physics steps using remaining accumulator time
       const _ms  = ac.moveSpeed !== undefined ? ac.moveSpeed : 1.0;
       const interpX = (_ms !== 0 && !guiControls.paused)
-        ? mod(ac.x + (_ms > 0 ? 1 : -1) * Math.abs(_ms) * 0.00001 * acAccumulator, 1.0)
+        ? mod(ac.x + (_ms > 0 ? 1 : -1) * Math.abs(_ms) * 0.000003 * acAccumulator, 1.0)
         : ac.x;
       const scrX = simToScreenX(interpX * sim_res_x);
       const scrY = simToScreenY(ac.y * sim_res_y);
