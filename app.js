@@ -5596,6 +5596,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         guiControls[key] = guiControls_default[key];
       }
     }
+    // Reset sounding forcing so the loaded sim runs free — the saved sounding profile
+    // is not stored in the file, so forcing toward the current (possibly different) sounding
+    // would cause gravity-wave oscillations immediately after load.
+    guiControls.soundingForcing = 0.0;
   }
 
   function setGuiUniforms()
@@ -11487,6 +11491,18 @@ var soundingGraph = {
           // Register a persistent action center on first click and apply physics continuously
           if (!wasLeftMousePressed) {
             const type = guiControls.tool == 'TOOL_ANTICYCLONE' ? 'H' : 'L';
+
+            // If clicking on an existing center, select it instead of placing a new one
+            let clickedACIdx = -1;
+            for (let _ci = 0; _ci < actionCenters.length; _ci++) {
+              const _ac = actionCenters[_ci];
+              const _dx = mod(mouseXinSim - _ac.x + 0.5, 1.0) - 0.5;
+              const _dy = mouseYinSim - _ac.y;
+              if (Math.sqrt(_dx*_dx + _dy*_dy) < _ac.radius * 1.5) { clickedACIdx = _ci; break; }
+            }
+            if (clickedACIdx >= 0) { selectAC(clickedACIdx); inputType = -1; }
+            else {
+
             const radiusNorm = guiControls.brushSize * 0.5 / sim_res_y;
             const newAC = {
               type      : type,
@@ -11515,6 +11531,7 @@ var soundingGraph = {
             guiControls.acWindAlt   = newAC.windAlt;
             guiControls.acTemp      = newAC.tempEffect;
             guiControls.acLabel     = newAC.label;
+            } // end else (not clicking existing center)
           }
           // No direct shader injection - wind handled globally
           inputType = -1;
@@ -12946,7 +12963,7 @@ var soundingGraph = {
 
       // ── Déplacement du centre ──────────────────────────────────────────
       if (moveSpeed !== 0) {
-        const speedPerMs = Math.abs(moveSpeed) * 0.000003;
+        const speedPerMs = Math.abs(moveSpeed) * 0.00005;
         ac.x = mod(ac.x + (moveSpeed > 0 ? 1 : -1) * speedPerMs * dt, 1.0);
       }
 
