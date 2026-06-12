@@ -5924,12 +5924,14 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     // ── Selected center dropdown (rebuilt dynamically when centers change) ─
     guiControls.acDropdown   = 'none';
-    guiControls.acIntensity  = 5;
-    guiControls.acFlux       = 0.0;
+    guiControls.acIntensityH = 5;
+    guiControls.acTempH      = 2.0;
     guiControls.acMoveH      = 1.0;
+    guiControls.acIntensityL = 5;
+    guiControls.acFluxL      = 0.0;
     guiControls.acMoveL      = 1.0;
-    guiControls.acWindAlt    = 1500;
-    guiControls.acTemp       = 0.0;
+    guiControls.acWindAltL   = 1500;
+    guiControls.acTempL      = -2.0;
     guiControls.acLabel      = '';
 
     var _acDropdownController = null;
@@ -5956,7 +5958,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     // ── H (Anticyclone) parameters ─────────────────────────────────────────
     var ac_H_folder = pressure_folder.addFolder('H — Anticyclone');
-    ac_H_folder.add(guiControls, 'acIntensity', 1, 10, 1).name('Intensity 1-10').listen()
+    ac_H_folder.add(guiControls, 'acIntensityH', 1, 10, 1).name('Intensity 1-10').listen()
       .onChange(function() { applyACSliders(); });
     ac_H_folder.add(guiControls, 'acMoveH', -5.0, 5.0, 0.1).name('Move W<0 E>0').listen()
       .onChange(function() {
@@ -5965,14 +5967,14 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         const ac = actionCenters[idx];
         if (ac && ac.type === 'H') ac.moveSpeed = guiControls.acMoveH;
       });
-    ac_H_folder.add(guiControls, 'acTemp', -5, 5, 0.5).name('Temp effect (°C)').listen()
+    ac_H_folder.add(guiControls, 'acTempH', -5, 5, 0.5).name('Temp effect (°C)').listen()
       .onChange(function() { applyACSliders(); });
 
     // ── L (Depression) parameters ──────────────────────────────────────────
     var ac_L_folder = pressure_folder.addFolder('L — Depression');
-    ac_L_folder.add(guiControls, 'acIntensity', 1, 10, 1).name('Intensity 1-10').listen()
+    ac_L_folder.add(guiControls, 'acIntensityL', 1, 10, 1).name('Intensity 1-10').listen()
       .onChange(function() { applyACSliders(); });
-    ac_L_folder.add(guiControls, 'acFlux', -1.0, 1.0, 0.1).name('Flux N<0 S>0').listen()
+    ac_L_folder.add(guiControls, 'acFluxL', -1.0, 1.0, 0.1).name('Flux N<0 S>0').listen()
       .onChange(function() { applyACSliders(); });
     ac_L_folder.add(guiControls, 'acMoveL', -5.0, 5.0, 0.1).name('Move W<0 E>0').listen()
       .onChange(function() {
@@ -5981,9 +5983,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         const ac = actionCenters[idx];
         if (ac && ac.type === 'L') ac.moveSpeed = guiControls.acMoveL;
       });
-    ac_L_folder.add(guiControls, 'acWindAlt', 100, 15000, 100).name('Wind ceiling (m)').listen()
+    ac_L_folder.add(guiControls, 'acWindAltL', 100, 15000, 100).name('Wind ceiling (m)').listen()
       .onChange(function() { applyACSliders(); });
-    ac_L_folder.add(guiControls, 'acTemp', -5, 5, 0.5).name('Temp effect (°C)').listen()
+    ac_L_folder.add(guiControls, 'acTempL', -5, 5, 0.5).name('Temp effect (°C)').listen()
       .onChange(function() { applyACSliders(); });
 
     var radiation_folder = datGui.addFolder('Radiation');
@@ -11519,20 +11521,25 @@ var soundingGraph = {
               moveSpeed : type === 'H' ? guiControls.acMoveH : guiControls.acMoveL,
               corePressure : type === 'H' ? 1025 : 990,
               rampFactor : 0.0,
-              windAlt    : type === 'H' ? (guiControls.simHeight || sim_height) : (guiControls.acWindAlt || 1500),
+              windAlt    : type === 'H' ? (guiControls.simHeight || sim_height) : (guiControls.acWindAltL || 1500),
               tempEffect : type === 'H' ? 2.0 : -2.0,
             };
             actionCenters.push(newAC);
             // Auto-select newly placed center
             selectedACIndex = actionCenters.length - 1;
             if (rebuildACDropdown) rebuildACDropdown();
-            guiControls.acDropdown  = newAC.label + ' (' + newAC.type + ')';
-            guiControls.acIntensity = newAC.intensity;
-            guiControls.acFlux      = newAC.flux      || 0.0;
-            if (type === 'H') guiControls.acMoveH = newAC.moveSpeed;
-            else              guiControls.acMoveL = newAC.moveSpeed;
-            guiControls.acWindAlt   = newAC.windAlt;
-            guiControls.acTemp      = newAC.tempEffect;
+            guiControls.acDropdown = newAC.label + ' (' + newAC.type + ')';
+            if (type === 'H') {
+              guiControls.acIntensityH = newAC.intensity;
+              guiControls.acTempH      = newAC.tempEffect;
+              guiControls.acMoveH      = newAC.moveSpeed;
+            } else {
+              guiControls.acIntensityL = newAC.intensity;
+              guiControls.acFluxL      = newAC.flux      || 0.0;
+              guiControls.acWindAltL   = newAC.windAlt;
+              guiControls.acTempL      = newAC.tempEffect;
+              guiControls.acMoveL      = newAC.moveSpeed;
+            }
             guiControls.acLabel     = newAC.label;
             } // end else (not clicking existing center)
           }
@@ -12670,10 +12677,15 @@ var soundingGraph = {
       : actionCenters.length - 1;
     if (idx < 0) return;
     const ac = actionCenters[idx];
-    ac.intensity  = guiControls.acIntensity;
-    ac.flux       = guiControls.acFlux;
-    ac.windAlt    = guiControls.acWindAlt;
-    ac.tempEffect = guiControls.acTemp;
+    if (ac.type === 'H') {
+      ac.intensity  = guiControls.acIntensityH;
+      ac.tempEffect = guiControls.acTempH;
+    } else {
+      ac.intensity  = guiControls.acIntensityL;
+      ac.flux       = guiControls.acFluxL;
+      ac.windAlt    = guiControls.acWindAltL;
+      ac.tempEffect = guiControls.acTempL;
+    }
     if (guiControls.acLabel && guiControls.acLabel.trim() !== '') {
       ac.label = guiControls.acLabel.trim();
     }
@@ -12684,14 +12696,19 @@ var soundingGraph = {
     selectedACIndex = idx;
     if (idx < 0 || idx >= actionCenters.length) return;
     const ac = actionCenters[idx];
-    guiControls.acIntensity = ac.intensity || 5;
-    guiControls.acFlux      = ac.flux      || 0.0;
-    if (ac.type === 'H') guiControls.acMoveH = ac.moveSpeed !== undefined ? ac.moveSpeed : 1.0;
-    else                 guiControls.acMoveL = ac.moveSpeed !== undefined ? ac.moveSpeed : 1.0;
-    guiControls.acWindAlt   = ac.windAlt   || 1500;
-    guiControls.acTemp      = ac.tempEffect !== undefined ? ac.tempEffect : (ac.type === 'H' ? 2.0 : -2.0);
-    guiControls.acLabel     = ac.label || '';
-    guiControls.acDropdown  = ac.label + ' (' + ac.type + ')';
+    if (ac.type === 'H') {
+      guiControls.acIntensityH = ac.intensity  || 5;
+      guiControls.acTempH      = ac.tempEffect !== undefined ? ac.tempEffect : 2.0;
+      guiControls.acMoveH      = ac.moveSpeed  !== undefined ? ac.moveSpeed  : 1.0;
+    } else {
+      guiControls.acIntensityL = ac.intensity  || 5;
+      guiControls.acFluxL      = ac.flux       || 0.0;
+      guiControls.acWindAltL   = ac.windAlt    || 1500;
+      guiControls.acTempL      = ac.tempEffect !== undefined ? ac.tempEffect : -2.0;
+      guiControls.acMoveL      = ac.moveSpeed  !== undefined ? ac.moveSpeed  : 1.0;
+    }
+    guiControls.acLabel    = ac.label || '';
+    guiControls.acDropdown = ac.label + ' (' + ac.type + ')';
   }
 
   // ── CAPE / CIN overlay functions ───────────────────────────────────────
