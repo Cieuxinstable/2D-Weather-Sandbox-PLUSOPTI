@@ -541,6 +541,10 @@
             border-color: rgba(0,212,255,0.3);
             background: rgba(0,212,255,0.04);
         }
+        .file-drop.drag-over {
+            border-color: rgba(0,212,255,0.7);
+            background: rgba(0,212,255,0.12);
+        }
         .file-drop input[type="file"] {
             position: absolute;
             inset: 0;
@@ -1105,8 +1109,11 @@
 
         <!-- LOAD SAVE FILE -->
         <div class="load-section">
-            <div class="file-drop">
-                <input type="file" id="fileInput" name="fileInput" accept=".weathersandbox" onchange="loadData()" />
+            <div class="file-drop"
+                 ondragover="event.preventDefault();this.classList.add('drag-over')"
+                 ondragleave="this.classList.remove('drag-over')"
+                 ondrop="handleFileDrop(event)">
+                <input type="file" id="fileInput" name="fileInput" accept=".weathersandbox,*" onchange="loadData()" />
                 <div class="file-icon">📂</div>
                 <div class="file-text">
                     <strong>Load a save file</strong>
@@ -1196,7 +1203,7 @@
     <script type="text/javascript" src="libraries/pako.min.js"></script>
     <script type="text/javascript" src="libraries/chart.js"></script>
     <script type="text/javascript" src="libraries/chartjs-adapter-date-fns.js"></script>
-    <script type="text/javascript" src="app.js?v=25"></script>
+    <script type="text/javascript" src="app.js?v=26"></script>
 
     <script>
         // Hour button logic

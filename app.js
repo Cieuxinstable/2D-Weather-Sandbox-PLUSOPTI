@@ -3192,9 +3192,16 @@ let actionCenters = [];  // array holding H/L pressure centers
 let radarNeedsMeasure = false;
 
 
-async function loadData()
+function handleFileDrop(event) {
+  event.preventDefault();
+  event.currentTarget.classList.remove('drag-over');
+  const file = event.dataTransfer && event.dataTransfer.files[0];
+  if (file) loadData(file);
+}
+
+async function loadData(externalFile)
 {
-  let file = document.getElementById('fileInput').files[0];
+  let file = externalFile || document.getElementById('fileInput').files[0];
 
   if (file) {                                                    // load data from save file
     let versionBlob = file.slice(0, 4);                          // extract first 4 bytes containing version id
@@ -5928,7 +5935,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     ac_H_folder.add(guiControls, 'acIntensity', 1, 10, 1).name('Intensity 1-10').listen()
       .onChange(function() { applyACSliders(); });
     ac_H_folder.add(guiControls, 'acMoveH', -5.0, 5.0, 0.1).name('Move W<0 E>0').listen()
-      .onChange(function() { applyACSliders(); });
+      .onChange(function() {
+        const idx = selectedACIndex >= 0 && selectedACIndex < actionCenters.length
+          ? selectedACIndex : actionCenters.length - 1;
+        const ac = actionCenters[idx];
+        if (ac && ac.type === 'H') ac.moveSpeed = guiControls.acMoveH;
+      });
     ac_H_folder.add(guiControls, 'acTemp', -5, 5, 0.5).name('Temp effect (°C)').listen()
       .onChange(function() { applyACSliders(); });
 
@@ -5939,7 +5951,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     ac_L_folder.add(guiControls, 'acFlux', -1.0, 1.0, 0.1).name('Flux N<0 S>0').listen()
       .onChange(function() { applyACSliders(); });
     ac_L_folder.add(guiControls, 'acMoveL', -5.0, 5.0, 0.1).name('Move W<0 E>0').listen()
-      .onChange(function() { applyACSliders(); });
+      .onChange(function() {
+        const idx = selectedACIndex >= 0 && selectedACIndex < actionCenters.length
+          ? selectedACIndex : actionCenters.length - 1;
+        const ac = actionCenters[idx];
+        if (ac && ac.type === 'L') ac.moveSpeed = guiControls.acMoveL;
+      });
     ac_L_folder.add(guiControls, 'acWindAlt', 100, 15000, 100).name('Wind ceiling (m)').listen()
       .onChange(function() { applyACSliders(); });
     ac_L_folder.add(guiControls, 'acTemp', -5, 5, 0.5).name('Temp effect (°C)').listen()
@@ -12610,7 +12627,6 @@ var soundingGraph = {
     const ac = actionCenters[idx];
     ac.intensity  = guiControls.acIntensity;
     ac.flux       = guiControls.acFlux;
-    ac.moveSpeed  = ac.type === 'H' ? guiControls.acMoveH : guiControls.acMoveL;
     ac.windAlt    = guiControls.acWindAlt;
     ac.tempEffect = guiControls.acTemp;
     if (guiControls.acLabel && guiControls.acLabel.trim() !== '') {
@@ -12998,13 +13014,6 @@ var soundingGraph = {
         actionCenterCtx.arc(scrX, scrY, rPx, 0, Math.PI * 2);
         actionCenterCtx.fillStyle = grad;
         actionCenterCtx.fill();
-        actionCenterCtx.beginPath();
-        actionCenterCtx.arc(scrX, scrY, rPx, 0, Math.PI * 2);
-        actionCenterCtx.strokeStyle = col + '0.60)';
-        actionCenterCtx.lineWidth   = 2;
-        actionCenterCtx.setLineDash([8, 5]);
-        actionCenterCtx.stroke();
-        actionCenterCtx.setLineDash([]);
 
         // Flèche de direction
         const arrowLen = rPx * 0.7;
