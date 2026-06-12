@@ -9603,7 +9603,15 @@ var soundingGraph = {
 
   const precipitationVertexShader = await loadShader('precipitationShader.vert');
   const precipitationShader = await loadShader('precipitationShader.frag');
-  const precipitationProgram = createProgram(precipitationVertexShader, precipitationShader, [ 'position_out', 'mass_out', 'density_out', 'size_out', 'compactness_out' ]);
+  let precipitationProgram;
+  try {
+    precipitationProgram = createProgram(precipitationVertexShader, precipitationShader, [ 'position_out', 'mass_out', 'density_out', 'size_out', 'compactness_out' ]);
+  } catch (e) {
+    await loadingBar.set(86, 'ERREUR: liaison du shader de précipitation échouée');
+    console.error('Precipitation shader link error:', e);
+    alert('Precipitation shader link failed:\n\n' + e);
+    return;
+  }
 
   gl.useProgram(precipitationProgram);
 
@@ -10607,6 +10615,7 @@ var soundingGraph = {
   // gl.texParameteri(
   //     gl.TEXTURE_2D, gl.TEXTURE_WRAP_T,
   //     gl.REPEAT);  // default, so no need to set
+  await loadingBar.add(0.5, 'Loading textures...');
 
   imgElement = await loadImage('resources/img/A380.png');
 
@@ -10618,6 +10627,7 @@ var soundingGraph = {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);            // CLAMP_TO_EDGE
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);            // REPEAT
                                                                                    // NEAREST_MIPMAP_LINEAR create weird effects
+  await loadingBar.add(0.5, 'Loading textures...');
 
   imgElement = await loadImage('resources/img/A380_R.png');
 
@@ -10628,6 +10638,7 @@ var soundingGraph = {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);            // CLAMP_TO_EDGE
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);            // REPEAT
+  await loadingBar.add(0.5, 'Loading textures...');
 
   imgElement = await loadImage('resources/img/A380_gear.png');
 
@@ -10638,6 +10649,7 @@ var soundingGraph = {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);            // CLAMP_TO_EDGE
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);            // REPEAT
+  await loadingBar.add(0.5, 'Loading textures...');
 
   imgElement = await loadImage('resources/img/surfaceTextureMap.png');
 
@@ -10648,7 +10660,7 @@ var soundingGraph = {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); // horizontal
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); // vertical
-
+  await loadingBar.add(0.5, 'Loading textures...');
 
   imgElement = await loadImage('resources/img/ColorScales.png');
 
@@ -10659,6 +10671,7 @@ var soundingGraph = {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); // horizontal
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); // vertical
+  await loadingBar.add(0.5, 'Loading textures...');
 
   updateRadarPaletteTexture();
 
