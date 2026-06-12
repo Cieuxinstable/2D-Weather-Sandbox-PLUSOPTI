@@ -55,6 +55,7 @@ uniform float acWindMoveX[8]; // ±1 for L, 0 for H (anticyclone)
 uniform float acWindRadX[8];  // horizontal radius of influence (sim-space)
 uniform float acHumidity[8];  // moisture injection strength per L center (0 = none)
 uniform float acIsL[8];       // 1.0 = L (depression), 0.0 = H (anticyclone)
+uniform float acCenterY[8];   // vertical center position (0=ground, 1=top) for L humidity band
 
 vec2 texelSize;
 
@@ -549,16 +550,16 @@ void main()
     }
   }
 
-  // L center: humidify air mass — only at altitude (not at ground level)
+  // L center: humidify a band centered on the center's vertical position
   for (int ai = 0; ai < acWindCount; ai++) {
     if (acIsL[ai] > 0.5 && acHumidity[ai] > 0.001 && wall[DISTANCE] != 0) {
-      float ceiling  = acWindData[ai].y;
-      float floorAlt = ceiling * 0.3;  // injection starts at 30% of ceiling height
+      float cy       = acCenterY[ai];           // vertical position of center (0-1)
+      float band     = 0.18;                    // half-width of injection band
       float hDist    = absHorizontalDist(acWindData[ai].x, texCoord.x) / max(acWindRadX[ai], 0.0001);
       float hWeight  = smoothstep(1.0, 0.0, hDist);
-      // ramp up from ground-floor, ramp down above ceiling — zero at surface
-      float altFact  = smoothstep(0.0, floorAlt, texCoord.y)
-                     * smoothstep(ceiling, ceiling * 0.7, texCoord.y);
+      // bell shaped band centered on cy, fading over ±band
+      float altFact  = smoothstep(cy - band, cy - band * 0.3, texCoord.y)
+                     * smoothstep(cy + band, cy + band * 0.3, texCoord.y);
       float w        = hWeight * altFact;
       if (w > 0.001) {
         float humStr  = acHumidity[ai] * acWindData[ai].z * w * 0.001;
