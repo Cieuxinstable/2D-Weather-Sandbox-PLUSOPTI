@@ -6538,10 +6538,14 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     return Math.max(1.0, Math.round(guiControls.reflectivityPixelSize));
   }
 
+  // Fix 22D: reuse across snapshot calls — avoids 6 × new Float32Array(64) per snapshot frame
+  const _polarRadarSitesBuf  = new Float32Array(RADAR_MAX_RENDER_SITES * 4);
+  const _polarRadarParamsBuf = new Float32Array(RADAR_MAX_RENDER_SITES * 4);
+
   function buildPolarRadarUniformData(towers)
   {
-    const sites = new Float32Array(RADAR_MAX_RENDER_SITES * 4);
-    const params = new Float32Array(RADAR_MAX_RENDER_SITES * 4);
+    const sites  = _polarRadarSitesBuf;
+    const params = _polarRadarParamsBuf;
 
     for (let index = 0; index < towers.length && index < RADAR_MAX_RENDER_SITES; index++) {
       const tower = towers[index];
@@ -10225,17 +10229,17 @@ var soundingGraph = {
     gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
     gl.disable(gl.BLEND);
     gl.useProgram(ehtReflectivitySourceProgram);
-    gl.uniform1f(gl.getUniformLocation(ehtReflectivitySourceProgram, 'reflMult'), guiControls.reflectivityGain);
-    gl.uniform1f(gl.getUniformLocation(ehtReflectivitySourceProgram, 'reflBoost'), guiControls.reflectivityBoost);
-    gl.uniform1f(gl.getUniformLocation(ehtReflectivitySourceProgram, 'simHeightKm'), guiControls.simHeight / 1000.0);
-    gl.uniform1i(gl.getUniformLocation(ehtReflectivitySourceProgram, 'wrapHorizontally'), guiControls.wrapHorizontally ? 1 : 0);
-    gl.uniform1i(gl.getUniformLocation(ehtReflectivitySourceProgram, 'usePolarGrid'), usePolarGrid ? 1 : 0);
-    gl.uniform1i(gl.getUniformLocation(ehtReflectivitySourceProgram, 'compositeMode'), radarPanelMode == RADAR_PANEL_MODE_COMPOSITE && usePolarGrid ? 1 : 0);
+    gl.uniform1f(_uloc_ehtSrc_reflMult,       guiControls.reflectivityGain);
+    gl.uniform1f(_uloc_ehtSrc_reflBoost,      guiControls.reflectivityBoost);
+    gl.uniform1f(_uloc_ehtSrc_simHeightKm,    guiControls.simHeight / 1000.0);
+    gl.uniform1i(_uloc_ehtSrc_wrapH,          guiControls.wrapHorizontally ? 1 : 0);
+    gl.uniform1i(_uloc_ehtSrc_usePolarGrid,   usePolarGrid ? 1 : 0);
+    gl.uniform1i(_uloc_ehtSrc_compositeMode,  radarPanelMode == RADAR_PANEL_MODE_COMPOSITE && usePolarGrid ? 1 : 0);
     const columnAttenuationEnabled = radarPanelMode == RADAR_PANEL_MODE_COMPOSITE && guiControls.radarAttenuationEnabled;
-    gl.uniform1i(gl.getUniformLocation(ehtReflectivitySourceProgram, 'attenuationEnabled'), columnAttenuationEnabled ? 1 : 0);
-    gl.uniform1i(gl.getUniformLocation(ehtReflectivitySourceProgram, 'radarCount'), uniformData.count);
-    gl.uniform4fv(gl.getUniformLocation(ehtReflectivitySourceProgram, 'radarSites[0]'), uniformData.sites);
-    gl.uniform4fv(gl.getUniformLocation(ehtReflectivitySourceProgram, 'radarParams[0]'), uniformData.params);
+    gl.uniform1i(_uloc_ehtSrc_attenuation,    columnAttenuationEnabled ? 1 : 0);
+    gl.uniform1i(_uloc_ehtSrc_radarCount,     uniformData.count);
+    gl.uniform4fv(_uloc_ehtSrc_radarSites,    uniformData.sites);
+    gl.uniform4fv(_uloc_ehtSrc_radarParams,   uniformData.params);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, reflectivitySnapshotTex);
     gl.activeTexture(gl.TEXTURE1);
@@ -10265,18 +10269,56 @@ var soundingGraph = {
     gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
     gl.disable(gl.BLEND);
     gl.useProgram(echoColumnProductsProgram);
-    gl.uniform1f(gl.getUniformLocation(echoColumnProductsProgram, 'reflMult'), guiControls.reflectivityGain);
-    gl.uniform1f(gl.getUniformLocation(echoColumnProductsProgram, 'reflBoost'), guiControls.reflectivityBoost);
-    gl.uniform1f(gl.getUniformLocation(echoColumnProductsProgram, 'simHeightKm'), guiControls.simHeight / 1000.0);
-    gl.uniform1f(gl.getUniformLocation(echoColumnProductsProgram, 'sourcePixelSize'), sourcePixelSize);
-    gl.uniform1i(gl.getUniformLocation(echoColumnProductsProgram, 'wrapHorizontally'), guiControls.wrapHorizontally ? 1 : 0);
-    gl.uniform1i(gl.getUniformLocation(echoColumnProductsProgram, 'usePolarGrid'), usePolarGrid ? 1 : 0);
-    gl.uniform1i(gl.getUniformLocation(echoColumnProductsProgram, 'radarCount'), uniformData.count);
-    gl.uniform4fv(gl.getUniformLocation(echoColumnProductsProgram, 'radarSites[0]'), uniformData.sites);
-    gl.uniform4fv(gl.getUniformLocation(echoColumnProductsProgram, 'radarParams[0]'), uniformData.params);
+    gl.uniform1f(_uloc_echoCol_reflMult,     guiControls.reflectivityGain);
+    gl.uniform1f(_uloc_echoCol_reflBoost,    guiControls.reflectivityBoost);
+    gl.uniform1f(_uloc_echoCol_simHeightKm,  guiControls.simHeight / 1000.0);
+    gl.uniform1f(_uloc_echoCol_srcPixelSize, sourcePixelSize);
+    gl.uniform1i(_uloc_echoCol_wrapH,        guiControls.wrapHorizontally ? 1 : 0);
+    gl.uniform1i(_uloc_echoCol_usePolarGrid, usePolarGrid ? 1 : 0);
+    gl.uniform1i(_uloc_echoCol_radarCount,   uniformData.count);
+    gl.uniform4fv(_uloc_echoCol_radarSites,  uniformData.sites);
+    gl.uniform4fv(_uloc_echoCol_radarParams, uniformData.params);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, reflectivityTexture);
     gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, wallTexture_1);
+    gl.bindVertexArray(fluidVao);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  // Fix 22B: rhohv + zdr field draws — deferred to next frame on large maps to split the snapshot GPU spike
+  function _doSnapshotPhase2() {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, rhohvSnapshotFBO);
+    gl.viewport(0, 0, sim_res_x, sim_res_y);
+    gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
+    gl.disable(gl.BLEND);
+    gl.useProgram(rhohvFieldProgram);
+    gl.uniform1f(_uloc_rhohvField_binSize, Math.max(1.0, Math.round(guiControls.rhohvPixelSize)));
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, radarMomentsSnapshotTex);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, phaseStatsSnapshotTex);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, wallTexture_1);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, sizeStatsSnapshotTex);
+    gl.bindVertexArray(fluidVao);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, zdrSnapshotFBO);
+    gl.viewport(0, 0, sim_res_x, sim_res_y);
+    gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
+    gl.disable(gl.BLEND);
+    gl.useProgram(zdrFieldProgram);
+    gl.uniform1f(_uloc_zdrField_fillRadius, Math.max(0.0, Math.round(guiControls.zdrFillRadius)));
+    gl.uniform1f(_uloc_zdrField_suppDbz,   guiControls.zdrMaskDbz);
+    gl.uniform1f(_uloc_zdrField_reflMult,  guiControls.reflectivityGain);
+    gl.uniform1f(_uloc_zdrField_reflBoost, guiControls.reflectivityBoost);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, radarMomentsSnapshotTex);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, reflectivitySnapshotTex);
+    gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, wallTexture_1);
     gl.bindVertexArray(fluidVao);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -10288,6 +10330,7 @@ var soundingGraph = {
     if (hadSnapshot)
       copyCurrentRadarSnapshotsToPrevious();
 
+    // Phase 1: GPU-GPU texture copies from live FBOs → snapshot textures
     gl.bindFramebuffer(gl.FRAMEBUFFER, phaseFrameBuff);
     gl.readBuffer(gl.COLOR_ATTACHMENT0);
     gl.bindTexture(gl.TEXTURE_2D, phaseSnapshotTex);
@@ -10309,47 +10352,19 @@ var soundingGraph = {
 
     renderColumnRadarProducts();
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, rhohvSnapshotFBO);
-    gl.viewport(0, 0, sim_res_x, sim_res_y);
-    gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
-    gl.disable(gl.BLEND);
-    gl.useProgram(rhohvFieldProgram);
-    gl.uniform1f(gl.getUniformLocation(rhohvFieldProgram, 'binSize'), Math.max(1.0, Math.round(guiControls.rhohvPixelSize)));
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, radarMomentsSnapshotTex);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, phaseStatsSnapshotTex);
-    gl.activeTexture(gl.TEXTURE2);
-    gl.bindTexture(gl.TEXTURE_2D, wallTexture_1);
-    gl.activeTexture(gl.TEXTURE3);
-    gl.bindTexture(gl.TEXTURE_2D, sizeStatsSnapshotTex);
-    gl.bindVertexArray(fluidVao);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, zdrSnapshotFBO);
-    gl.viewport(0, 0, sim_res_x, sim_res_y);
-    gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
-    gl.disable(gl.BLEND);
-    gl.useProgram(zdrFieldProgram);
-    gl.uniform1f(gl.getUniformLocation(zdrFieldProgram, 'fillRadius'), Math.max(0.0, Math.round(guiControls.zdrFillRadius)));
-    gl.uniform1f(gl.getUniformLocation(zdrFieldProgram, 'supportDbzMin'), guiControls.zdrMaskDbz);
-    gl.uniform1f(gl.getUniformLocation(zdrFieldProgram, 'reflMult'), guiControls.reflectivityGain);
-    gl.uniform1f(gl.getUniformLocation(zdrFieldProgram, 'reflBoost'), guiControls.reflectivityBoost);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, radarMomentsSnapshotTex);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, reflectivitySnapshotTex);
-    gl.activeTexture(gl.TEXTURE2);
-    gl.bindTexture(gl.TEXTURE_2D, wallTexture_1);
-    gl.bindVertexArray(fluidVao);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
     lastReflectivitySnapshotTime = now;
     radarSweepStartTime = now;
     if (!hadSnapshot)
       copyCurrentRadarSnapshotsToPrevious();
     radarRefreshNoiseTick += 1.0;
-    radarNeedsMeasure = true; // trigger radar updates after new snapshot
+    radarNeedsMeasure = true;
+
+    // Phase 2 (rhohv + zdr field draws): defer to next frame on large maps to halve the snapshot GPU spike
+    if (_largemap) {
+      _snapshotPhase2Pending = true;
+    } else {
+      _doSnapshotPhase2();
+    }
   }
 
   function bindRadarProductTextureForDisplayMode(displayMode)
@@ -10408,26 +10423,26 @@ var soundingGraph = {
     const uniformData = buildPolarRadarUniformData(towers);
 
     gl.useProgram(radarPolarDisplayProgram);
-    gl.uniform2f(gl.getUniformLocation(radarPolarDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-    gl.uniform3f(gl.getUniformLocation(radarPolarDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
-    gl.uniform4f(gl.getUniformLocation(radarPolarDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
-    gl.uniform1f(gl.getUniformLocation(radarPolarDisplayProgram, 'Xmult'), horizontalDisplayMult);
-    gl.uniform1i(gl.getUniformLocation(radarPolarDisplayProgram, 'productMode'), productMode);
-    gl.uniform1i(gl.getUniformLocation(radarPolarDisplayProgram, 'productOpaque'), productOpaque ? 1 : 0);
-    gl.uniform1f(gl.getUniformLocation(radarPolarDisplayProgram, 'productAlpha'), 0.76);
-    gl.uniform1f(gl.getUniformLocation(radarPolarDisplayProgram, 'reflMult'), guiControls.reflectivityGain);
-    gl.uniform1f(gl.getUniformLocation(radarPolarDisplayProgram, 'reflBoost'), guiControls.reflectivityBoost);
-    gl.uniform1f(gl.getUniformLocation(radarPolarDisplayProgram, 'simHeightKm'), guiControls.simHeight / 1000.0);
-    gl.uniform1i(gl.getUniformLocation(radarPolarDisplayProgram, 'wrapHorizontally'), guiControls.wrapHorizontally ? 1 : 0);
-    gl.uniform1i(gl.getUniformLocation(radarPolarDisplayProgram, 'compositeMode'), radarPanelMode == RADAR_PANEL_MODE_COMPOSITE ? 1 : 0);
-    gl.uniform1i(gl.getUniformLocation(radarPolarDisplayProgram, 'attenuationEnabled'), guiControls.radarAttenuationEnabled ? 1 : 0);
+    gl.uniform2f(_uloc_polarDisp_aspectRatios,  sim_aspect, canvas_aspect);
+    gl.uniform3f(_uloc_polarDisp_view,           cam.curXpos, cam.curYpos, cam.curZoom);
+    gl.uniform4f(_uloc_polarDisp_cursor,         mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
+    gl.uniform1f(_uloc_polarDisp_Xmult,          horizontalDisplayMult);
+    gl.uniform1i(_uloc_polarDisp_productMode,    productMode);
+    gl.uniform1i(_uloc_polarDisp_productOpaque,  productOpaque ? 1 : 0);
+    gl.uniform1f(_uloc_polarDisp_productAlpha,   0.76);
+    gl.uniform1f(_uloc_polarDisp_reflMult,       guiControls.reflectivityGain);
+    gl.uniform1f(_uloc_polarDisp_reflBoost,      guiControls.reflectivityBoost);
+    gl.uniform1f(_uloc_polarDisp_simHeightKm,    guiControls.simHeight / 1000.0);
+    gl.uniform1i(_uloc_polarDisp_wrapH,          guiControls.wrapHorizontally ? 1 : 0);
+    gl.uniform1i(_uloc_polarDisp_compositeMode,  radarPanelMode == RADAR_PANEL_MODE_COMPOSITE ? 1 : 0);
+    gl.uniform1i(_uloc_polarDisp_attenuation,    guiControls.radarAttenuationEnabled ? 1 : 0);
     const sweepProgress = getRadarSweepProgress(performance.now ? performance.now() : Date.now());
-    gl.uniform1i(gl.getUniformLocation(radarPolarDisplayProgram, 'sweepRevealEnabled'), guiControls.radarRefreshMode == RADAR_REFRESH_MODE_SWEEP && radarPreviousSnapshotReady ? 1 : 0);
-    gl.uniform1f(gl.getUniformLocation(radarPolarDisplayProgram, 'sweepProgress'), sweepProgress);
-    gl.uniform1f(gl.getUniformLocation(radarPolarDisplayProgram, 'compositePixelSize'), getRadarProductPixelSize(displayMode));
-    gl.uniform1i(gl.getUniformLocation(radarPolarDisplayProgram, 'radarCount'), uniformData.count);
-    gl.uniform4fv(gl.getUniformLocation(radarPolarDisplayProgram, 'radarSites[0]'), uniformData.sites);
-    gl.uniform4fv(gl.getUniformLocation(radarPolarDisplayProgram, 'radarParams[0]'), uniformData.params);
+    gl.uniform1i(_uloc_polarDisp_sweepEnabled,   guiControls.radarRefreshMode == RADAR_REFRESH_MODE_SWEEP && radarPreviousSnapshotReady ? 1 : 0);
+    gl.uniform1f(_uloc_polarDisp_sweepProgress,  sweepProgress);
+    gl.uniform1f(_uloc_polarDisp_compPixelSize,  getRadarProductPixelSize(displayMode));
+    gl.uniform1i(_uloc_polarDisp_radarCount,     uniformData.count);
+    gl.uniform4fv(_uloc_polarDisp_radarSites,    uniformData.sites);
+    gl.uniform4fv(_uloc_polarDisp_radarParams,   uniformData.params);
     applyRadarPaletteUniforms(radarPolarDisplayProgram, productId);
 
     gl.activeTexture(gl.TEXTURE0 + RADAR_PALETTE_TEXTURE_UNIT);
@@ -11180,11 +11195,63 @@ var soundingGraph = {
   const _largemap = sim_res_x * sim_res_y > 4000000;
   const _radarDbgBuf = new Float32Array(4);
 
+  // ── Fix 22C: Snapshot + polar display uniform caches (24 lookups/snapshot + 19/frame in radar modes) ──
+  const _uloc_rhohvField_binSize      = gl.getUniformLocation(rhohvFieldProgram,            'binSize');
+  const _uloc_zdrField_fillRadius     = gl.getUniformLocation(zdrFieldProgram,              'fillRadius');
+  const _uloc_zdrField_suppDbz        = gl.getUniformLocation(zdrFieldProgram,              'supportDbzMin');
+  const _uloc_zdrField_reflMult       = gl.getUniformLocation(zdrFieldProgram,              'reflMult');
+  const _uloc_zdrField_reflBoost      = gl.getUniformLocation(zdrFieldProgram,              'reflBoost');
+  const _uloc_echoCol_reflMult        = gl.getUniformLocation(echoColumnProductsProgram,    'reflMult');
+  const _uloc_echoCol_reflBoost       = gl.getUniformLocation(echoColumnProductsProgram,    'reflBoost');
+  const _uloc_echoCol_simHeightKm     = gl.getUniformLocation(echoColumnProductsProgram,    'simHeightKm');
+  const _uloc_echoCol_srcPixelSize    = gl.getUniformLocation(echoColumnProductsProgram,    'sourcePixelSize');
+  const _uloc_echoCol_wrapH           = gl.getUniformLocation(echoColumnProductsProgram,    'wrapHorizontally');
+  const _uloc_echoCol_usePolarGrid    = gl.getUniformLocation(echoColumnProductsProgram,    'usePolarGrid');
+  const _uloc_echoCol_radarCount      = gl.getUniformLocation(echoColumnProductsProgram,    'radarCount');
+  const _uloc_echoCol_radarSites      = gl.getUniformLocation(echoColumnProductsProgram,    'radarSites[0]');
+  const _uloc_echoCol_radarParams     = gl.getUniformLocation(echoColumnProductsProgram,    'radarParams[0]');
+  const _uloc_ehtSrc_reflMult         = gl.getUniformLocation(ehtReflectivitySourceProgram, 'reflMult');
+  const _uloc_ehtSrc_reflBoost        = gl.getUniformLocation(ehtReflectivitySourceProgram, 'reflBoost');
+  const _uloc_ehtSrc_simHeightKm      = gl.getUniformLocation(ehtReflectivitySourceProgram, 'simHeightKm');
+  const _uloc_ehtSrc_wrapH            = gl.getUniformLocation(ehtReflectivitySourceProgram, 'wrapHorizontally');
+  const _uloc_ehtSrc_usePolarGrid     = gl.getUniformLocation(ehtReflectivitySourceProgram, 'usePolarGrid');
+  const _uloc_ehtSrc_compositeMode    = gl.getUniformLocation(ehtReflectivitySourceProgram, 'compositeMode');
+  const _uloc_ehtSrc_attenuation      = gl.getUniformLocation(ehtReflectivitySourceProgram, 'attenuationEnabled');
+  const _uloc_ehtSrc_radarCount       = gl.getUniformLocation(ehtReflectivitySourceProgram, 'radarCount');
+  const _uloc_ehtSrc_radarSites       = gl.getUniformLocation(ehtReflectivitySourceProgram, 'radarSites[0]');
+  const _uloc_ehtSrc_radarParams      = gl.getUniformLocation(ehtReflectivitySourceProgram, 'radarParams[0]');
+  const _uloc_polarDisp_aspectRatios  = gl.getUniformLocation(radarPolarDisplayProgram,     'aspectRatios');
+  const _uloc_polarDisp_view          = gl.getUniformLocation(radarPolarDisplayProgram,     'view');
+  const _uloc_polarDisp_cursor        = gl.getUniformLocation(radarPolarDisplayProgram,     'cursor');
+  const _uloc_polarDisp_Xmult         = gl.getUniformLocation(radarPolarDisplayProgram,     'Xmult');
+  const _uloc_polarDisp_productMode   = gl.getUniformLocation(radarPolarDisplayProgram,     'productMode');
+  const _uloc_polarDisp_productOpaque = gl.getUniformLocation(radarPolarDisplayProgram,     'productOpaque');
+  const _uloc_polarDisp_productAlpha  = gl.getUniformLocation(radarPolarDisplayProgram,     'productAlpha');
+  const _uloc_polarDisp_reflMult      = gl.getUniformLocation(radarPolarDisplayProgram,     'reflMult');
+  const _uloc_polarDisp_reflBoost     = gl.getUniformLocation(radarPolarDisplayProgram,     'reflBoost');
+  const _uloc_polarDisp_simHeightKm   = gl.getUniformLocation(radarPolarDisplayProgram,     'simHeightKm');
+  const _uloc_polarDisp_wrapH         = gl.getUniformLocation(radarPolarDisplayProgram,     'wrapHorizontally');
+  const _uloc_polarDisp_compositeMode = gl.getUniformLocation(radarPolarDisplayProgram,     'compositeMode');
+  const _uloc_polarDisp_attenuation   = gl.getUniformLocation(radarPolarDisplayProgram,     'attenuationEnabled');
+  const _uloc_polarDisp_sweepEnabled  = gl.getUniformLocation(radarPolarDisplayProgram,     'sweepRevealEnabled');
+  const _uloc_polarDisp_sweepProgress = gl.getUniformLocation(radarPolarDisplayProgram,     'sweepProgress');
+  const _uloc_polarDisp_compPixelSize = gl.getUniformLocation(radarPolarDisplayProgram,     'compositePixelSize');
+  const _uloc_polarDisp_radarCount    = gl.getUniformLocation(radarPolarDisplayProgram,     'radarCount');
+  const _uloc_polarDisp_radarSites    = gl.getUniformLocation(radarPolarDisplayProgram,     'radarSites[0]');
+  const _uloc_polarDisp_radarParams   = gl.getUniformLocation(radarPolarDisplayProgram,     'radarParams[0]');
+  let _snapshotPhase2Pending = false; // Fix 22B: true when rhohv+zdr draws deferred to next frame
+
   setInterval(calcFps, 1000); // log fps
   requestAnimationFrame(draw);
 
   function draw()
   { // Runs for every frame
+    // Fix 22B: dispatch deferred snapshot phase-2 (rhohv+zdr field draws) from previous frame on large maps
+    if (_snapshotPhase2Pending) {
+      _snapshotPhase2Pending = false;
+      _doSnapshotPhase2();
+    }
+
     // Non-blocking thunder check: fence from last frame lets readPixels return instantly
     if (_thunderSyncFence) {
       const _fStatus = gl.clientWaitSync(_thunderSyncFence, 0, 0);
@@ -11807,9 +11874,12 @@ var soundingGraph = {
     }
 
     // radar-like sweep: freeze reflectivity every user-defined interval
+    // Fix 22A: skip entirely when no radar product is displayed and panel is closed
+    // — eliminates 8 GPU copies + 3 full-res draws + 24 getUniformLocation per 3-second cycle in DISP_REAL
     const nowMs = performance.now ? performance.now() : Date.now();
     const refreshMs = getRadarSnapshotIntervalMs();
-    if (nowMs - lastReflectivitySnapshotTime >= refreshMs) {
+    if ((radarDrawerOpen || !!getRadarProductIdForDisplayMode(guiControls.displayMode)) &&
+        nowMs - lastReflectivitySnapshotTime >= refreshMs) {
       refreshReflectivitySnapshot(nowMs);
     }
 
@@ -13255,8 +13325,6 @@ var soundingGraph = {
 
 
       if (!guiControls.paused) {
-        console.log(FPS + ' FPS   ' + guiControls.IterPerFrame + ' Iterations / frame      ' + FPS * guiControls.IterPerFrame + ' Iterations / second');
-
         if (guiControls.auto_IterPerFrame && !airplaneMode) {
           const fpsTarget = 60;
           adjIterPerFrame((FPS / fpsTarget - 1.0) * 5.0); // example: ((30 / 60)-1.0) = -0.5
