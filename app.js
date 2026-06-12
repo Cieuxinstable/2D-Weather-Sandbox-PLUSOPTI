@@ -11495,10 +11495,13 @@ var soundingGraph = {
             // If clicking on an existing center, select it instead of placing a new one
             let clickedACIdx = -1;
             for (let _ci = 0; _ci < actionCenters.length; _ci++) {
-              const _ac = actionCenters[_ci];
-              const _dx = mod(mouseXinSim - _ac.x + 0.5, 1.0) - 0.5;
-              const _dy = mouseYinSim - _ac.y;
-              if (Math.sqrt(_dx*_dx + _dy*_dy) < _ac.radius * 1.5) { clickedACIdx = _ci; break; }
+              const _ac     = actionCenters[_ci];
+              const _acScrX = simToScreenX(_ac.x * sim_res_x);
+              const _acScrY = simToScreenY(_ac.y * sim_res_y);
+              const _rPx    = Math.abs(simToScreenX(_ac.x * sim_res_x + _ac.radius * sim_res_y) - _acScrX);
+              const _dxPx   = mouseX - _acScrX;
+              const _dyPx   = mouseY - _acScrY;
+              if (_dxPx * _dxPx + _dyPx * _dyPx < _rPx * _rPx * 2.25) { clickedACIdx = _ci; break; }
             }
             if (clickedACIdx >= 0) { selectAC(clickedACIdx); inputType = -1; }
             else {
@@ -13105,18 +13108,6 @@ var soundingGraph = {
         actionCenterCtx.fillStyle = col + '0.80)';
         actionCenterCtx.fillText(Math.round(ac.corePressure) + ' hPa', scrX, scrY + fontSize * 0.6);
 
-        // Anneau de sélection (rayon adapté si pas de cercle)
-        const acIdx = actionCenters.indexOf(ac);
-        const isSelected = acIdx === selectedACIndex ||
-          (selectedACIndex < 0 && acIdx === actionCenters.length - 1);
-        if (isSelected) {
-          const selR = guiControls.showActionCenters ? rPx * 1.08 : fontSize * 0.85;
-          actionCenterCtx.beginPath();
-          actionCenterCtx.arc(scrX, scrY, selR, 0, Math.PI * 2);
-          actionCenterCtx.strokeStyle = 'rgba(255,255,255,0.7)';
-          actionCenterCtx.lineWidth   = 3;
-          actionCenterCtx.stroke();
-        }
       }
     }
   }
