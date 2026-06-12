@@ -1240,6 +1240,7 @@ const guiControls_default = {
   auto_IterPerFrame : true,
   sound : true,
   showActionCenters : false,
+  showACLabels      : true,
   showIsobars : false,
   actionCentersEnabled : true,
   dryLapseRate : 10.0,     // Real: 9.8 degrees / km
@@ -5882,6 +5883,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     // ── Action Centers & Isobars ──────────────────────────────────────────
     var pressure_folder = datGui.addFolder('Pressure Systems');
     pressure_folder.add(guiControls, 'actionCentersEnabled').name('Enable H/L tools').listen();
+    pressure_folder.add(guiControls, 'showACLabels').name('Show H/L labels').listen();
     pressure_folder.add(guiControls, 'showActionCenters').name('Show H/L circles').listen();
     pressure_folder.add(guiControls, 'showIsobars').name('Show isobars').listen();
     pressure_folder.add({clearCenters: function() {
@@ -5893,7 +5895,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     guiControls.acDropdown   = 'none';
     guiControls.acIntensity  = 5;
     guiControls.acFlux       = 0.0;
-    guiControls.acMove       = 1.0;
+    guiControls.acMoveH      = 0.0;
+    guiControls.acMoveL      = 0.0;
     guiControls.acWindAlt    = 1500;
     guiControls.acTemp       = 0.0;
     guiControls.acLabel      = '';
@@ -5908,6 +5911,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       if (opts.indexOf(guiControls.acDropdown) < 0) guiControls.acDropdown = 'none';
       _acDropdownController = pressure_folder.add(guiControls, 'acDropdown', opts)
         .name('Select')
+        .listen()
         .onChange(function(val) {
           var idx = actionCenters.findIndex(function(ac) { return ac.label + ' (' + ac.type + ')' === val; });
           if (idx >= 0) selectAC(idx);
@@ -5923,7 +5927,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     var ac_H_folder = pressure_folder.addFolder('H — Anticyclone');
     ac_H_folder.add(guiControls, 'acIntensity', 1, 10, 1).name('Intensity 1-10').listen()
       .onChange(function() { applyACSliders(); });
-    ac_H_folder.add(guiControls, 'acMove', -5.0, 5.0, 0.1).name('Move W<0 E>0').listen()
+    ac_H_folder.add(guiControls, 'acMoveH', -5.0, 5.0, 0.1).name('Move W<0 E>0').listen()
       .onChange(function() { applyACSliders(); });
     ac_H_folder.add(guiControls, 'acTemp', -5, 5, 0.5).name('Temp effect (°C)').listen()
       .onChange(function() { applyACSliders(); });
@@ -5934,7 +5938,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .onChange(function() { applyACSliders(); });
     ac_L_folder.add(guiControls, 'acFlux', -1.0, 1.0, 0.1).name('Flux N<0 S>0').listen()
       .onChange(function() { applyACSliders(); });
-    ac_L_folder.add(guiControls, 'acMove', -5.0, 5.0, 0.1).name('Move W<0 E>0').listen()
+    ac_L_folder.add(guiControls, 'acMoveL', -5.0, 5.0, 0.1).name('Move W<0 E>0').listen()
       .onChange(function() { applyACSliders(); });
     ac_L_folder.add(guiControls, 'acWindAlt', 100, 15000, 100).name('Wind ceiling (m)').listen()
       .onChange(function() { applyACSliders(); });
@@ -11456,6 +11460,7 @@ var soundingGraph = {
               intensity : 5,
               dirEast   : true,
               speed     : 0.0,
+              moveSpeed : type === 'H' ? guiControls.acMoveH : guiControls.acMoveL,
               corePressure : type === 'H' ? 1025 : 990,
               rampFactor : 0.0,
               windAlt    : type === 'H' ? (guiControls.simHeight || sim_height) : (guiControls.acWindAlt || 1500),
@@ -11468,7 +11473,8 @@ var soundingGraph = {
             guiControls.acDropdown  = newAC.label + ' (' + newAC.type + ')';
             guiControls.acIntensity = newAC.intensity;
             guiControls.acFlux      = newAC.flux      || 0.0;
-            guiControls.acMove      = newAC.moveSpeed !== undefined ? newAC.moveSpeed : 1.0;
+            if (type === 'H') guiControls.acMoveH = newAC.moveSpeed;
+            else              guiControls.acMoveL = newAC.moveSpeed;
             guiControls.acWindAlt   = newAC.windAlt;
             guiControls.acTemp      = newAC.tempEffect;
             guiControls.acLabel     = newAC.label;
@@ -12604,7 +12610,7 @@ var soundingGraph = {
     const ac = actionCenters[idx];
     ac.intensity  = guiControls.acIntensity;
     ac.flux       = guiControls.acFlux;
-    ac.moveSpeed  = guiControls.acMove;
+    ac.moveSpeed  = ac.type === 'H' ? guiControls.acMoveH : guiControls.acMoveL;
     ac.windAlt    = guiControls.acWindAlt;
     ac.tempEffect = guiControls.acTemp;
     if (guiControls.acLabel && guiControls.acLabel.trim() !== '') {
@@ -12619,7 +12625,8 @@ var soundingGraph = {
     const ac = actionCenters[idx];
     guiControls.acIntensity = ac.intensity || 5;
     guiControls.acFlux      = ac.flux      || 0.0;
-    guiControls.acMove      = ac.moveSpeed !== undefined ? ac.moveSpeed : 1.0;
+    if (ac.type === 'H') guiControls.acMoveH = ac.moveSpeed !== undefined ? ac.moveSpeed : 0.0;
+    else                 guiControls.acMoveL = ac.moveSpeed !== undefined ? ac.moveSpeed : 0.0;
     guiControls.acWindAlt   = ac.windAlt   || 1500;
     guiControls.acTemp      = ac.tempEffect !== undefined ? ac.tempEffect : (ac.type === 'H' ? 2.0 : -2.0);
     guiControls.acLabel     = ac.label || '';
@@ -12942,12 +12949,11 @@ var soundingGraph = {
     if (actionCenterCanvas.height !== canvas.height) actionCenterCanvas.height = canvas.height;
     actionCenterCtx.clearRect(0, 0, actionCenterCanvas.width, actionCenterCanvas.height);
 
-    if (!guiControls.showActionCenters && !guiControls.showIsobars) return;
+    if (!guiControls.showACLabels && !guiControls.showActionCenters && !guiControls.showIsobars) return;
     if (actionCenters.length === 0) return;
 
-    const isobarStep  = 4;    // hPa entre chaque isobare
-    const isobarCount = 2;    // nombre d'isobares
-    const basePressure = 1013; // hPa environnement
+    const isobarStep  = 4;
+    const isobarCount = 2;
 
     for (const ac of actionCenters) {
       const isH  = ac.type === 'H';
@@ -12958,29 +12964,21 @@ var soundingGraph = {
       const intensity = ac.intensity || 5;
 
       if (guiControls.showIsobars) {
-        // Isobares concentriques avec valeurs hPa
         for (let ring = 1; ring <= isobarCount; ring++) {
-          const ringR   = rPx * (0.8 + ring * 0.65);
-          const hpaVal  = isH
-            ? ac.corePressure - ring * isobarStep
-            : ac.corePressure + ring * isobarStep;
-          const alpha   = Math.max(0.15, 0.55 - ring * 0.08);
-
+          const ringR  = rPx * (0.8 + ring * 0.65);
+          const hpaVal = isH ? ac.corePressure - ring * isobarStep : ac.corePressure + ring * isobarStep;
+          const alpha  = Math.max(0.15, 0.55 - ring * 0.08);
           actionCenterCtx.beginPath();
           actionCenterCtx.arc(scrX, scrY, ringR, 0, Math.PI * 2);
           actionCenterCtx.strokeStyle = col + alpha + ')';
           actionCenterCtx.lineWidth   = Math.max(1, 2.2 - ring * 0.3);
           actionCenterCtx.setLineDash([]);
           actionCenterCtx.stroke();
-
-          // Label hPa sur l'isobare (à droite)
           const labelX = scrX + ringR * 0.707;
           const labelY = scrY - ringR * 0.707;
           actionCenterCtx.font         = 'bold 11px monospace';
-          actionCenterCtx.fillStyle    = col + '0.85)';
           actionCenterCtx.textAlign    = 'center';
           actionCenterCtx.textBaseline = 'middle';
-          // Fond semi-transparent pour lisibilité
           const txt = Math.round(hpaVal) + ' hPa';
           const tw  = actionCenterCtx.measureText(txt).width;
           actionCenterCtx.fillStyle = 'rgba(0,0,0,0.45)';
@@ -12991,7 +12989,7 @@ var soundingGraph = {
       }
 
       if (guiControls.showActionCenters) {
-        // Glow
+        // Glow + dashed circle
         const grad = actionCenterCtx.createRadialGradient(scrX, scrY, 0, scrX, scrY, rPx);
         grad.addColorStop(0,   col + '0.20)');
         grad.addColorStop(0.6, col + '0.08)');
@@ -13000,8 +12998,6 @@ var soundingGraph = {
         actionCenterCtx.arc(scrX, scrY, rPx, 0, Math.PI * 2);
         actionCenterCtx.fillStyle = grad;
         actionCenterCtx.fill();
-
-        // Cercle principal pointillé
         actionCenterCtx.beginPath();
         actionCenterCtx.arc(scrX, scrY, rPx, 0, Math.PI * 2);
         actionCenterCtx.strokeStyle = col + '0.60)';
@@ -13010,42 +13006,7 @@ var soundingGraph = {
         actionCenterCtx.stroke();
         actionCenterCtx.setLineDash([]);
 
-        // Lettre H ou L
-        const fontSize = Math.max(20, Math.min(rPx * 0.5, 56));
-        actionCenterCtx.font         = 'bold ' + fontSize + 'px "Syne", sans-serif';
-        actionCenterCtx.fillStyle    = col + '0.95)';
-        actionCenterCtx.textAlign    = 'center';
-        actionCenterCtx.textBaseline = 'middle';
-        actionCenterCtx.fillText(ac.type, scrX, scrY);
-
-        // Nom personnalisé au-dessus de la lettre
-        const nameLabel = ac.label || (ac.type + (actionCenters.indexOf(ac) + 1));
-        const nameLabelFs = Math.max(11, Math.min(fontSize * 0.32, 18));
-        actionCenterCtx.font      = 'bold ' + nameLabelFs + 'px monospace';
-        actionCenterCtx.fillStyle = col + '0.92)';
-        actionCenterCtx.fillText(nameLabel, scrX, scrY - fontSize * 0.60);
-
-        // Indicateur sélection (anneau blanc)
-        const acIdx = actionCenters.indexOf(ac);
-        const isSelected = acIdx === selectedACIndex ||
-          (selectedACIndex < 0 && acIdx === actionCenters.length - 1);
-        if (isSelected) {
-          actionCenterCtx.beginPath();
-          actionCenterCtx.arc(scrX, scrY, rPx * 1.08, 0, Math.PI * 2);
-          actionCenterCtx.strokeStyle = 'rgba(255,255,255,0.7)';
-          actionCenterCtx.lineWidth   = 3;
-          actionCenterCtx.setLineDash([4,3]);
-          actionCenterCtx.stroke();
-          actionCenterCtx.setLineDash([]);
-        }
-
-        // Pression cœur sous la lettre
-        const coreFs = Math.max(10, fontSize * 0.35);
-        actionCenterCtx.font      = 'bold ' + coreFs + 'px monospace';
-        actionCenterCtx.fillStyle = col + '0.80)';
-        actionCenterCtx.fillText(Math.round(ac.corePressure) + ' hPa', scrX, scrY + fontSize * 0.6);
-
-        // Flèche de direction de déplacement
+        // Flèche de direction
         const arrowLen = rPx * 0.7;
         const arrowDir = ac.dirEast ? 1 : -1;
         const ax1 = scrX - arrowDir * arrowLen * 0.4;
@@ -13053,18 +13014,53 @@ var soundingGraph = {
         actionCenterCtx.beginPath();
         actionCenterCtx.moveTo(ax1, scrY + rPx * 1.4);
         actionCenterCtx.lineTo(ax2, scrY + rPx * 1.4);
-        // Pointe
         actionCenterCtx.lineTo(ax2 - arrowDir * 10, scrY + rPx * 1.4 - 6);
         actionCenterCtx.moveTo(ax2, scrY + rPx * 1.4);
         actionCenterCtx.lineTo(ax2 - arrowDir * 10, scrY + rPx * 1.4 + 6);
         actionCenterCtx.strokeStyle = col + '0.70)';
         actionCenterCtx.lineWidth   = 2;
         actionCenterCtx.stroke();
-
-        // Intensité
-        actionCenterCtx.font      = 'bold ' + Math.max(10, coreFs) + 'px monospace';
+        actionCenterCtx.font      = 'bold 10px monospace';
         actionCenterCtx.fillStyle = col + '0.70)';
+        actionCenterCtx.textAlign    = 'center';
+        actionCenterCtx.textBaseline = 'middle';
         actionCenterCtx.fillText('Int.' + intensity, scrX, scrY + rPx * 1.4 + 18);
+      }
+
+      // Lettre H/L, nom, hPa, anneau de sélection — visibles si labels OU cercles activés
+      if (guiControls.showACLabels || guiControls.showActionCenters) {
+        const fontSize = Math.max(20, Math.min(rPx * 0.5, 56));
+        actionCenterCtx.font         = 'bold ' + fontSize + 'px "Syne", sans-serif';
+        actionCenterCtx.fillStyle    = col + '0.95)';
+        actionCenterCtx.textAlign    = 'center';
+        actionCenterCtx.textBaseline = 'middle';
+        actionCenterCtx.fillText(ac.type, scrX, scrY);
+
+        const nameLabel   = ac.label || (ac.type + (actionCenters.indexOf(ac) + 1));
+        const nameLabelFs = Math.max(11, Math.min(fontSize * 0.32, 18));
+        actionCenterCtx.font      = 'bold ' + nameLabelFs + 'px monospace';
+        actionCenterCtx.fillStyle = col + '0.92)';
+        actionCenterCtx.fillText(nameLabel, scrX, scrY - fontSize * 0.60);
+
+        const coreFs = Math.max(10, fontSize * 0.35);
+        actionCenterCtx.font      = 'bold ' + coreFs + 'px monospace';
+        actionCenterCtx.fillStyle = col + '0.80)';
+        actionCenterCtx.fillText(Math.round(ac.corePressure) + ' hPa', scrX, scrY + fontSize * 0.6);
+
+        // Anneau de sélection (rayon adapté si pas de cercle)
+        const acIdx = actionCenters.indexOf(ac);
+        const isSelected = acIdx === selectedACIndex ||
+          (selectedACIndex < 0 && acIdx === actionCenters.length - 1);
+        if (isSelected) {
+          const selR = guiControls.showActionCenters ? rPx * 1.08 : fontSize * 0.85;
+          actionCenterCtx.beginPath();
+          actionCenterCtx.arc(scrX, scrY, selR, 0, Math.PI * 2);
+          actionCenterCtx.strokeStyle = 'rgba(255,255,255,0.7)';
+          actionCenterCtx.lineWidth   = 3;
+          actionCenterCtx.setLineDash([4,3]);
+          actionCenterCtx.stroke();
+          actionCenterCtx.setLineDash([]);
+        }
       }
     }
   }
