@@ -13018,9 +13018,14 @@ var soundingGraph = {
     for (const ac of actionCenters) {
       const isH  = ac.type === 'H';
       const col  = isH ? 'rgba(220,60,60,' : 'rgba(60,120,220,';
-      const scrX = simToScreenX(ac.x * sim_res_x);
+      // Interpolate between physics steps using remaining accumulator time
+      const _ms  = ac.moveSpeed !== undefined ? ac.moveSpeed : 1.0;
+      const interpX = (_ms !== 0 && !guiControls.paused)
+        ? mod(ac.x + (_ms > 0 ? 1 : -1) * Math.abs(_ms) * 0.00005 * acAccumulator, 1.0)
+        : ac.x;
+      const scrX = simToScreenX(interpX * sim_res_x);
       const scrY = simToScreenY(ac.y * sim_res_y);
-      const rPx  = Math.abs(simToScreenX(ac.x * sim_res_x + ac.radius * sim_res_y) - scrX);
+      const rPx  = Math.abs(simToScreenX(interpX * sim_res_x + ac.radius * sim_res_y) - scrX);
       const intensity = ac.intensity || 5;
 
       if (guiControls.showIsobars) {
