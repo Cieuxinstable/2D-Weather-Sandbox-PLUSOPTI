@@ -3201,7 +3201,22 @@ function handleFileDrop(event) {
 
 async function loadData(externalFile)
 {
-  let file = externalFile || document.getElementById('fileInput').files[0];
+  let file;
+  if (typeof externalFile === 'string') {
+    // URL string from example save links — fetch from server
+    try {
+      const resp = await fetch(externalFile);
+      if (!resp.ok) { alert('Could not load example save (HTTP ' + resp.status + ')'); return; }
+      const blob = await resp.blob();
+      const urlPath = externalFile.split('/').pop();
+      file = new File([blob], urlPath.replace(/%20/g, ' '), { type: 'application/octet-stream' });
+    } catch(e) {
+      alert('Could not load example save:\n' + e);
+      return;
+    }
+  } else {
+    file = externalFile instanceof File ? externalFile : document.getElementById('fileInput').files[0];
+  }
 
   if (file) {                                                    // load data from save file
     let versionBlob = file.slice(0, 4);                          // extract first 4 bytes containing version id
@@ -5569,7 +5584,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     }
 
   } else {
-    setupDatGui(guiControlsFromSaveFile);                     // use settings from save file
+    try {
+      setupDatGui(guiControlsFromSaveFile);                   // use settings from save file
+    } catch(e) {
+      console.warn('Save file settings could not be loaded, using defaults:', e);
+      setupDatGui(JSON.stringify(guiControls_default));
+    }
 
     for (const [key, value] of Object.entries(guiControls)) { // set numerical values that could not be loaded from the savefile to their defaults.
       if (value === -1) {
@@ -5902,8 +5922,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     guiControls.acDropdown   = 'none';
     guiControls.acIntensity  = 5;
     guiControls.acFlux       = 0.0;
-    guiControls.acMoveH      = 0.0;
-    guiControls.acMoveL      = 0.0;
+    guiControls.acMoveH      = 1.0;
+    guiControls.acMoveL      = 1.0;
     guiControls.acWindAlt    = 1500;
     guiControls.acTemp       = 0.0;
     guiControls.acLabel      = '';
@@ -12641,8 +12661,8 @@ var soundingGraph = {
     const ac = actionCenters[idx];
     guiControls.acIntensity = ac.intensity || 5;
     guiControls.acFlux      = ac.flux      || 0.0;
-    if (ac.type === 'H') guiControls.acMoveH = ac.moveSpeed !== undefined ? ac.moveSpeed : 0.0;
-    else                 guiControls.acMoveL = ac.moveSpeed !== undefined ? ac.moveSpeed : 0.0;
+    if (ac.type === 'H') guiControls.acMoveH = ac.moveSpeed !== undefined ? ac.moveSpeed : 1.0;
+    else                 guiControls.acMoveL = ac.moveSpeed !== undefined ? ac.moveSpeed : 1.0;
     guiControls.acWindAlt   = ac.windAlt   || 1500;
     guiControls.acTemp      = ac.tempEffect !== undefined ? ac.tempEffect : (ac.type === 'H' ? 2.0 : -2.0);
     guiControls.acLabel     = ac.label || '';
@@ -13005,7 +13025,7 @@ var soundingGraph = {
       }
 
       if (guiControls.showActionCenters) {
-        // Glow + dashed circle
+        // Glow
         const grad = actionCenterCtx.createRadialGradient(scrX, scrY, 0, scrX, scrY, rPx);
         grad.addColorStop(0,   col + '0.20)');
         grad.addColorStop(0.6, col + '0.08)');
@@ -13066,9 +13086,7 @@ var soundingGraph = {
           actionCenterCtx.arc(scrX, scrY, selR, 0, Math.PI * 2);
           actionCenterCtx.strokeStyle = 'rgba(255,255,255,0.7)';
           actionCenterCtx.lineWidth   = 3;
-          actionCenterCtx.setLineDash([4,3]);
           actionCenterCtx.stroke();
-          actionCenterCtx.setLineDash([]);
         }
       }
     }
