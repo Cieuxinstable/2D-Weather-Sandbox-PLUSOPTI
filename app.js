@@ -11419,11 +11419,13 @@ var soundingGraph = {
     if (leftMousePressed && !wasLeftMousePressed) {
       if (guiControls.tool !== 'TOOL_ANTICYCLONE' && guiControls.tool !== 'TOOL_DEPRESSION') {
         for (let i = 0; i < actionCenters.length; i++) {
-          const ac = actionCenters[i];
-          const dx = mod(mouseXinSim - ac.x + 0.5, 1.0) - 0.5;
-          const dy = mouseYinSim - ac.y;
-          const dist = Math.sqrt(dx*dx + dy*dy);
-          if (dist < ac.radius * sim_res_y / sim_res_y * 1.5) {
+          const ac     = actionCenters[i];
+          const _scrX  = simToScreenX(ac.x * sim_res_x);
+          const _scrY  = simToScreenY(ac.y * sim_res_y);
+          const _rPx   = Math.abs(simToScreenX(ac.x * sim_res_x + ac.radius * sim_res_y) - _scrX);
+          const _dxPx  = mouseX - _scrX;
+          const _dyPx  = mouseY - _scrY;
+          if (_dxPx * _dxPx + _dyPx * _dyPx < _rPx * _rPx * 2.25) {
             selectAC(i);
             break;
           }
