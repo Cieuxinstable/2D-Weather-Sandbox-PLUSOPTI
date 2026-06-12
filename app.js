@@ -11529,8 +11529,8 @@ var soundingGraph = {
             actionCenters.push(newAC);
             // Auto-select newly placed center
             selectedACIndex = actionCenters.length - 1;
-            if (rebuildACDropdown) rebuildACDropdown();
             guiControls.acDropdown = newAC.label + ' (' + newAC.type + ')';
+            if (rebuildACDropdown) rebuildACDropdown();
             if (type === 'H') {
               guiControls.acIntensityH = newAC.intensity;
               guiControls.acTempH      = newAC.tempEffect;
@@ -12711,6 +12711,7 @@ var soundingGraph = {
     }
     guiControls.acLabel    = ac.label || '';
     guiControls.acDropdown = ac.label + ' (' + ac.type + ')';
+    if (rebuildACDropdown) rebuildACDropdown();
   }
 
   // ── CAPE / CIN overlay functions ───────────────────────────────────────
