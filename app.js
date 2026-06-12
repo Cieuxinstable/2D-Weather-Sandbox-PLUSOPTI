@@ -10531,6 +10531,54 @@ var soundingGraph = {
   gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
   gl.clear(gl.COLOR_BUFFER_BIT);
 
+  // ── Fix 22C: Snapshot + polar display uniform caches — must be initialized before refreshReflectivitySnapshot ──
+  const _uloc_rhohvField_binSize      = gl.getUniformLocation(rhohvFieldProgram,            'binSize');
+  const _uloc_zdrField_fillRadius     = gl.getUniformLocation(zdrFieldProgram,              'fillRadius');
+  const _uloc_zdrField_suppDbz        = gl.getUniformLocation(zdrFieldProgram,              'supportDbzMin');
+  const _uloc_zdrField_reflMult       = gl.getUniformLocation(zdrFieldProgram,              'reflMult');
+  const _uloc_zdrField_reflBoost      = gl.getUniformLocation(zdrFieldProgram,              'reflBoost');
+  const _uloc_echoCol_reflMult        = gl.getUniformLocation(echoColumnProductsProgram,    'reflMult');
+  const _uloc_echoCol_reflBoost       = gl.getUniformLocation(echoColumnProductsProgram,    'reflBoost');
+  const _uloc_echoCol_simHeightKm     = gl.getUniformLocation(echoColumnProductsProgram,    'simHeightKm');
+  const _uloc_echoCol_srcPixelSize    = gl.getUniformLocation(echoColumnProductsProgram,    'sourcePixelSize');
+  const _uloc_echoCol_wrapH           = gl.getUniformLocation(echoColumnProductsProgram,    'wrapHorizontally');
+  const _uloc_echoCol_usePolarGrid    = gl.getUniformLocation(echoColumnProductsProgram,    'usePolarGrid');
+  const _uloc_echoCol_radarCount      = gl.getUniformLocation(echoColumnProductsProgram,    'radarCount');
+  const _uloc_echoCol_radarSites      = gl.getUniformLocation(echoColumnProductsProgram,    'radarSites[0]');
+  const _uloc_echoCol_radarParams     = gl.getUniformLocation(echoColumnProductsProgram,    'radarParams[0]');
+  const _uloc_ehtSrc_reflMult         = gl.getUniformLocation(ehtReflectivitySourceProgram, 'reflMult');
+  const _uloc_ehtSrc_reflBoost        = gl.getUniformLocation(ehtReflectivitySourceProgram, 'reflBoost');
+  const _uloc_ehtSrc_simHeightKm      = gl.getUniformLocation(ehtReflectivitySourceProgram, 'simHeightKm');
+  const _uloc_ehtSrc_wrapH            = gl.getUniformLocation(ehtReflectivitySourceProgram, 'wrapHorizontally');
+  const _uloc_ehtSrc_usePolarGrid     = gl.getUniformLocation(ehtReflectivitySourceProgram, 'usePolarGrid');
+  const _uloc_ehtSrc_compositeMode    = gl.getUniformLocation(ehtReflectivitySourceProgram, 'compositeMode');
+  const _uloc_ehtSrc_attenuation      = gl.getUniformLocation(ehtReflectivitySourceProgram, 'attenuationEnabled');
+  const _uloc_ehtSrc_radarCount       = gl.getUniformLocation(ehtReflectivitySourceProgram, 'radarCount');
+  const _uloc_ehtSrc_radarSites       = gl.getUniformLocation(ehtReflectivitySourceProgram, 'radarSites[0]');
+  const _uloc_ehtSrc_radarParams      = gl.getUniformLocation(ehtReflectivitySourceProgram, 'radarParams[0]');
+  const _uloc_polarDisp_aspectRatios  = gl.getUniformLocation(radarPolarDisplayProgram,     'aspectRatios');
+  const _uloc_polarDisp_view          = gl.getUniformLocation(radarPolarDisplayProgram,     'view');
+  const _uloc_polarDisp_cursor        = gl.getUniformLocation(radarPolarDisplayProgram,     'cursor');
+  const _uloc_polarDisp_Xmult         = gl.getUniformLocation(radarPolarDisplayProgram,     'Xmult');
+  const _uloc_polarDisp_productMode   = gl.getUniformLocation(radarPolarDisplayProgram,     'productMode');
+  const _uloc_polarDisp_productOpaque = gl.getUniformLocation(radarPolarDisplayProgram,     'productOpaque');
+  const _uloc_polarDisp_productAlpha  = gl.getUniformLocation(radarPolarDisplayProgram,     'productAlpha');
+  const _uloc_polarDisp_reflMult      = gl.getUniformLocation(radarPolarDisplayProgram,     'reflMult');
+  const _uloc_polarDisp_reflBoost     = gl.getUniformLocation(radarPolarDisplayProgram,     'reflBoost');
+  const _uloc_polarDisp_simHeightKm   = gl.getUniformLocation(radarPolarDisplayProgram,     'simHeightKm');
+  const _uloc_polarDisp_wrapH         = gl.getUniformLocation(radarPolarDisplayProgram,     'wrapHorizontally');
+  const _uloc_polarDisp_compositeMode = gl.getUniformLocation(radarPolarDisplayProgram,     'compositeMode');
+  const _uloc_polarDisp_attenuation   = gl.getUniformLocation(radarPolarDisplayProgram,     'attenuationEnabled');
+  const _uloc_polarDisp_sweepEnabled  = gl.getUniformLocation(radarPolarDisplayProgram,     'sweepRevealEnabled');
+  const _uloc_polarDisp_sweepProgress = gl.getUniformLocation(radarPolarDisplayProgram,     'sweepProgress');
+  const _uloc_polarDisp_compPixelSize = gl.getUniformLocation(radarPolarDisplayProgram,     'compositePixelSize');
+  const _uloc_polarDisp_radarCount    = gl.getUniformLocation(radarPolarDisplayProgram,     'radarCount');
+  const _uloc_polarDisp_radarSites    = gl.getUniformLocation(radarPolarDisplayProgram,     'radarSites[0]');
+  const _uloc_polarDisp_radarParams   = gl.getUniformLocation(radarPolarDisplayProgram,     'radarParams[0]');
+  let _snapshotPhase2Pending = false; // Fix 22B: true when rhohv+zdr draws deferred to next frame
+  const _largemap    = sim_res_x * sim_res_y > 4000000;
+  const _radarDbgBuf = new Float32Array(4);
+
   // initialize snapshot immediately so first render has valid data
   refreshReflectivitySnapshot(performance.now ? performance.now() : 0);
 
@@ -11205,55 +11253,6 @@ var soundingGraph = {
   const _uloc_univDisp_radarProduct     = gl.getUniformLocation(universalDisplayProgram, 'radarProduct');
   const _uloc_univDisp_quantityIndex    = gl.getUniformLocation(universalDisplayProgram, 'quantityIndex');
   const _uloc_univDisp_dispMultiplier   = gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier');
-  const _largemap = sim_res_x * sim_res_y > 4000000;
-  const _radarDbgBuf = new Float32Array(4);
-
-  // ── Fix 22C: Snapshot + polar display uniform caches (24 lookups/snapshot + 19/frame in radar modes) ──
-  const _uloc_rhohvField_binSize      = gl.getUniformLocation(rhohvFieldProgram,            'binSize');
-  const _uloc_zdrField_fillRadius     = gl.getUniformLocation(zdrFieldProgram,              'fillRadius');
-  const _uloc_zdrField_suppDbz        = gl.getUniformLocation(zdrFieldProgram,              'supportDbzMin');
-  const _uloc_zdrField_reflMult       = gl.getUniformLocation(zdrFieldProgram,              'reflMult');
-  const _uloc_zdrField_reflBoost      = gl.getUniformLocation(zdrFieldProgram,              'reflBoost');
-  const _uloc_echoCol_reflMult        = gl.getUniformLocation(echoColumnProductsProgram,    'reflMult');
-  const _uloc_echoCol_reflBoost       = gl.getUniformLocation(echoColumnProductsProgram,    'reflBoost');
-  const _uloc_echoCol_simHeightKm     = gl.getUniformLocation(echoColumnProductsProgram,    'simHeightKm');
-  const _uloc_echoCol_srcPixelSize    = gl.getUniformLocation(echoColumnProductsProgram,    'sourcePixelSize');
-  const _uloc_echoCol_wrapH           = gl.getUniformLocation(echoColumnProductsProgram,    'wrapHorizontally');
-  const _uloc_echoCol_usePolarGrid    = gl.getUniformLocation(echoColumnProductsProgram,    'usePolarGrid');
-  const _uloc_echoCol_radarCount      = gl.getUniformLocation(echoColumnProductsProgram,    'radarCount');
-  const _uloc_echoCol_radarSites      = gl.getUniformLocation(echoColumnProductsProgram,    'radarSites[0]');
-  const _uloc_echoCol_radarParams     = gl.getUniformLocation(echoColumnProductsProgram,    'radarParams[0]');
-  const _uloc_ehtSrc_reflMult         = gl.getUniformLocation(ehtReflectivitySourceProgram, 'reflMult');
-  const _uloc_ehtSrc_reflBoost        = gl.getUniformLocation(ehtReflectivitySourceProgram, 'reflBoost');
-  const _uloc_ehtSrc_simHeightKm      = gl.getUniformLocation(ehtReflectivitySourceProgram, 'simHeightKm');
-  const _uloc_ehtSrc_wrapH            = gl.getUniformLocation(ehtReflectivitySourceProgram, 'wrapHorizontally');
-  const _uloc_ehtSrc_usePolarGrid     = gl.getUniformLocation(ehtReflectivitySourceProgram, 'usePolarGrid');
-  const _uloc_ehtSrc_compositeMode    = gl.getUniformLocation(ehtReflectivitySourceProgram, 'compositeMode');
-  const _uloc_ehtSrc_attenuation      = gl.getUniformLocation(ehtReflectivitySourceProgram, 'attenuationEnabled');
-  const _uloc_ehtSrc_radarCount       = gl.getUniformLocation(ehtReflectivitySourceProgram, 'radarCount');
-  const _uloc_ehtSrc_radarSites       = gl.getUniformLocation(ehtReflectivitySourceProgram, 'radarSites[0]');
-  const _uloc_ehtSrc_radarParams      = gl.getUniformLocation(ehtReflectivitySourceProgram, 'radarParams[0]');
-  const _uloc_polarDisp_aspectRatios  = gl.getUniformLocation(radarPolarDisplayProgram,     'aspectRatios');
-  const _uloc_polarDisp_view          = gl.getUniformLocation(radarPolarDisplayProgram,     'view');
-  const _uloc_polarDisp_cursor        = gl.getUniformLocation(radarPolarDisplayProgram,     'cursor');
-  const _uloc_polarDisp_Xmult         = gl.getUniformLocation(radarPolarDisplayProgram,     'Xmult');
-  const _uloc_polarDisp_productMode   = gl.getUniformLocation(radarPolarDisplayProgram,     'productMode');
-  const _uloc_polarDisp_productOpaque = gl.getUniformLocation(radarPolarDisplayProgram,     'productOpaque');
-  const _uloc_polarDisp_productAlpha  = gl.getUniformLocation(radarPolarDisplayProgram,     'productAlpha');
-  const _uloc_polarDisp_reflMult      = gl.getUniformLocation(radarPolarDisplayProgram,     'reflMult');
-  const _uloc_polarDisp_reflBoost     = gl.getUniformLocation(radarPolarDisplayProgram,     'reflBoost');
-  const _uloc_polarDisp_simHeightKm   = gl.getUniformLocation(radarPolarDisplayProgram,     'simHeightKm');
-  const _uloc_polarDisp_wrapH         = gl.getUniformLocation(radarPolarDisplayProgram,     'wrapHorizontally');
-  const _uloc_polarDisp_compositeMode = gl.getUniformLocation(radarPolarDisplayProgram,     'compositeMode');
-  const _uloc_polarDisp_attenuation   = gl.getUniformLocation(radarPolarDisplayProgram,     'attenuationEnabled');
-  const _uloc_polarDisp_sweepEnabled  = gl.getUniformLocation(radarPolarDisplayProgram,     'sweepRevealEnabled');
-  const _uloc_polarDisp_sweepProgress = gl.getUniformLocation(radarPolarDisplayProgram,     'sweepProgress');
-  const _uloc_polarDisp_compPixelSize = gl.getUniformLocation(radarPolarDisplayProgram,     'compositePixelSize');
-  const _uloc_polarDisp_radarCount    = gl.getUniformLocation(radarPolarDisplayProgram,     'radarCount');
-  const _uloc_polarDisp_radarSites    = gl.getUniformLocation(radarPolarDisplayProgram,     'radarSites[0]');
-  const _uloc_polarDisp_radarParams   = gl.getUniformLocation(radarPolarDisplayProgram,     'radarParams[0]');
-  let _snapshotPhase2Pending = false; // Fix 22B: true when rhohv+zdr draws deferred to next frame
-
   setInterval(calcFps, 1000); // log fps
   requestAnimationFrame(draw);
 
