@@ -54,6 +54,7 @@ uniform vec4  acWindData[8];  // x=centerX, y=windCeiling(norm), z=normIntens, w
 uniform float acWindMoveX[8]; // ±1 for L, 0 for H (anticyclone)
 uniform float acWindRadX[8];  // horizontal radius of influence (sim-space)
 uniform float acHumidity[8];  // moisture injection strength per L center (0 = none)
+uniform float acIsL[8];       // 1.0 = L (depression), 0.0 = H (anticyclone)
 
 vec2 texelSize;
 
@@ -534,7 +535,7 @@ void main()
 
   // H center: dry water vapor up to its configured altitude ceiling
   for (int ai = 0; ai < acWindCount; ai++) {
-    if (abs(acWindMoveX[ai]) < 0.001 && wall[DISTANCE] != 0) {
+    if (acIsL[ai] < 0.5 && wall[DISTANCE] != 0) {
       float ceiling = acWindData[ai].y;
       float hDist   = absHorizontalDist(acWindData[ai].x, texCoord.x) / max(acWindRadX[ai], 0.0001);
       float hWeight = smoothstep(1.0, 0.0, hDist);
@@ -550,7 +551,7 @@ void main()
 
   // L center: humidify air mass up to its wind ceiling
   for (int ai = 0; ai < acWindCount; ai++) {
-    if (abs(acWindMoveX[ai]) > 0.001 && acHumidity[ai] > 0.001 && wall[DISTANCE] != 0) {
+    if (acIsL[ai] > 0.5 && acHumidity[ai] > 0.001 && wall[DISTANCE] != 0) {
       float ceiling = acWindData[ai].y;
       float hDist   = absHorizontalDist(acWindData[ai].x, texCoord.x) / max(acWindRadX[ai], 0.0001);
       float hWeight = smoothstep(1.0, 0.0, hDist);

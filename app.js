@@ -9696,6 +9696,7 @@ var soundingGraph = {
   const _acWindMoveXBuf = new Float32Array(8);
   const _acWindRadXBuf  = new Float32Array(8);
   const _acHumBuf       = new Float32Array(8);
+  const _acIsLBuf       = new Float32Array(8);
   // Persistent readback buffers: avoids Float32Array(4) allocation on every fence completion
   const _thunderReadBuf  = new Float32Array(4);
   const _dropletReadBuf  = new Float32Array(4);
@@ -11250,6 +11251,7 @@ var soundingGraph = {
   const _uloc_adv_acMoveX  = gl.getUniformLocation(advectionProgram,                   'acWindMoveX[0]');
   const _uloc_adv_acRadX   = gl.getUniformLocation(advectionProgram,                   'acWindRadX[0]');
   const _uloc_adv_acHum    = gl.getUniformLocation(advectionProgram,                   'acHumidity[0]');
+  const _uloc_adv_acIsL    = gl.getUniformLocation(advectionProgram,                   'acIsL[0]');
   const _uloc_precip_iter  = gl.getUniformLocation(precipitationProgram,               'iterNum');
   const _uloc_lloc_iter    = gl.getUniformLocation(lightningLocationProgram,            'iterNum');
   const _uloc_radar_mode   = gl.getUniformLocation(radarFieldUpdateProgram,             'fieldUpdateMode');
@@ -11646,6 +11648,7 @@ var soundingGraph = {
               _acWindMoveX[_acWindCount] = moveX;
               _acWindRadX [_acWindCount] = radiusX;
               _acHumBuf   [_acWindCount] = ac.type === 'L' ? (ac.humidity || 0.0) : 0.0;
+              _acIsLBuf   [_acWindCount] = ac.type === 'L' ? 1.0 : 0.0;
               _acWindCount++;
             }
           }
@@ -11726,6 +11729,7 @@ var soundingGraph = {
             gl.uniform1fv(_uloc_adv_acMoveX, _acWindMoveX);
             gl.uniform1fv(_uloc_adv_acRadX,  _acWindRadX);
             gl.uniform1fv(_uloc_adv_acHum,   _acHumBuf);
+            gl.uniform1fv(_uloc_adv_acIsL,   _acIsLBuf);
 
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
