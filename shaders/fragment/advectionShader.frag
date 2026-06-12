@@ -549,14 +549,17 @@ void main()
     }
   }
 
-  // L center: humidify air mass up to its wind ceiling
+  // L center: humidify air mass — only at altitude (not at ground level)
   for (int ai = 0; ai < acWindCount; ai++) {
     if (acIsL[ai] > 0.5 && acHumidity[ai] > 0.001 && wall[DISTANCE] != 0) {
-      float ceiling = acWindData[ai].y;
-      float hDist   = absHorizontalDist(acWindData[ai].x, texCoord.x) / max(acWindRadX[ai], 0.0001);
-      float hWeight = smoothstep(1.0, 0.0, hDist);
-      float altFact = ceiling > 0.001 ? smoothstep(ceiling, ceiling * 0.15, texCoord.y) : 1.0;
-      float w       = hWeight * altFact;
+      float ceiling  = acWindData[ai].y;
+      float floorAlt = ceiling * 0.3;  // injection starts at 30% of ceiling height
+      float hDist    = absHorizontalDist(acWindData[ai].x, texCoord.x) / max(acWindRadX[ai], 0.0001);
+      float hWeight  = smoothstep(1.0, 0.0, hDist);
+      // ramp up from ground-floor, ramp down above ceiling — zero at surface
+      float altFact  = smoothstep(0.0, floorAlt, texCoord.y)
+                     * smoothstep(ceiling, ceiling * 0.7, texCoord.y);
+      float w        = hWeight * altFact;
       if (w > 0.001) {
         float humStr  = acHumidity[ai] * acWindData[ai].z * w * 0.001;
         water[TOTAL]  = min(water[TOTAL] + humStr, 10.0);
