@@ -5919,8 +5919,19 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     pressure_folder.add(guiControls, 'showIsobars').name('Show isobars').listen();
     pressure_folder.add({clearCenters: function() {
       actionCenters = [];
+      selectedACIndex = -1;
       if (rebuildACDropdown) rebuildACDropdown();
     }}, 'clearCenters').name('Clear all H/L');
+    pressure_folder.add({deleteSelected: function() {
+      const idx = selectedACIndex >= 0 && selectedACIndex < actionCenters.length ? selectedACIndex : -1;
+      if (idx < 0) return;
+      actionCenters.splice(idx, 1);
+      selectedACIndex = actionCenters.length > 0 ? Math.min(idx, actionCenters.length - 1) : -1;
+      guiControls.acDropdown = selectedACIndex >= 0
+        ? actionCenters[selectedACIndex].label + ' (' + actionCenters[selectedACIndex].type + ')'
+        : 'none';
+      if (rebuildACDropdown) rebuildACDropdown();
+    }}, 'deleteSelected').name('Delete selected H/L');
 
     // ── Selected center dropdown (rebuilt dynamically when centers change) ─
     guiControls.acDropdown   = 'none';
@@ -5932,6 +5943,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     guiControls.acMoveL      = 1.0;
     guiControls.acWindAltL   = 1500;
     guiControls.acTempL      = -2.0;
+    guiControls.acHumidityL  = 0.0;
     guiControls.acLabel      = '';
 
     var _acDropdownController = null;
@@ -5986,6 +5998,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     ac_L_folder.add(guiControls, 'acWindAltL', 100, 15000, 100).name('Wind ceiling (m)').listen()
       .onChange(function() { applyACSliders(); });
     ac_L_folder.add(guiControls, 'acTempL', -5, 5, 0.5).name('Temp effect (°C)').listen()
+      .onChange(function() { applyACSliders(); });
+    ac_L_folder.add(guiControls, 'acHumidityL', 0.0, 5.0, 0.1).name('Moisture injection').listen()
       .onChange(function() { applyACSliders(); });
 
     var radiation_folder = datGui.addFolder('Radiation');
@@ -9681,6 +9695,7 @@ var soundingGraph = {
   const _acWindDataBuf  = new Float32Array(8 * 4);
   const _acWindMoveXBuf = new Float32Array(8);
   const _acWindRadXBuf  = new Float32Array(8);
+  const _acHumBuf       = new Float32Array(8);
   // Persistent readback buffers: avoids Float32Array(4) allocation on every fence completion
   const _thunderReadBuf  = new Float32Array(4);
   const _dropletReadBuf  = new Float32Array(4);
@@ -11234,6 +11249,7 @@ var soundingGraph = {
   const _uloc_adv_acData   = gl.getUniformLocation(advectionProgram,                   'acWindData[0]');
   const _uloc_adv_acMoveX  = gl.getUniformLocation(advectionProgram,                   'acWindMoveX[0]');
   const _uloc_adv_acRadX   = gl.getUniformLocation(advectionProgram,                   'acWindRadX[0]');
+  const _uloc_adv_acHum    = gl.getUniformLocation(advectionProgram,                   'acHumidity[0]');
   const _uloc_precip_iter  = gl.getUniformLocation(precipitationProgram,               'iterNum');
   const _uloc_lloc_iter    = gl.getUniformLocation(lightningLocationProgram,            'iterNum');
   const _uloc_radar_mode   = gl.getUniformLocation(radarFieldUpdateProgram,             'fieldUpdateMode');
@@ -11525,6 +11541,7 @@ var soundingGraph = {
               rampFactor : 0.0,
               windAlt    : type === 'H' ? (guiControls.simHeight || sim_height) : (guiControls.acWindAltL || 1500),
               tempEffect : type === 'H' ? 2.0 : -2.0,
+              humidity   : type === 'L' ? (guiControls.acHumidityL || 0.0) : 0.0,
             };
             actionCenters.push(newAC);
             // Auto-select newly placed center
@@ -11541,6 +11558,7 @@ var soundingGraph = {
               guiControls.acWindAltL   = newAC.windAlt;
               guiControls.acTempL      = newAC.tempEffect;
               guiControls.acMoveL      = newAC.moveSpeed;
+              guiControls.acHumidityL  = newAC.humidity  || 0.0;
             }
             guiControls.acLabel     = newAC.label;
             } // end else (not clicking existing center)
@@ -11627,6 +11645,7 @@ var soundingGraph = {
               _acWindData[_acWindCount * 4 + 3] = tempFx;
               _acWindMoveX[_acWindCount] = moveX;
               _acWindRadX [_acWindCount] = radiusX;
+              _acHumBuf   [_acWindCount] = ac.type === 'L' ? (ac.humidity || 0.0) : 0.0;
               _acWindCount++;
             }
           }
@@ -11706,6 +11725,7 @@ var soundingGraph = {
             gl.uniform4fv(_uloc_adv_acData,  _acWindData);
             gl.uniform1fv(_uloc_adv_acMoveX, _acWindMoveX);
             gl.uniform1fv(_uloc_adv_acRadX,  _acWindRadX);
+            gl.uniform1fv(_uloc_adv_acHum,   _acHumBuf);
 
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
@@ -12687,6 +12707,7 @@ var soundingGraph = {
       ac.flux       = guiControls.acFluxL;
       ac.windAlt    = guiControls.acWindAltL;
       ac.tempEffect = guiControls.acTempL;
+      ac.humidity   = guiControls.acHumidityL;
     }
     if (guiControls.acLabel && guiControls.acLabel.trim() !== '') {
       ac.label = guiControls.acLabel.trim();
@@ -12708,6 +12729,7 @@ var soundingGraph = {
       guiControls.acWindAltL   = ac.windAlt    || 1500;
       guiControls.acTempL      = ac.tempEffect !== undefined ? ac.tempEffect : -2.0;
       guiControls.acMoveL      = ac.moveSpeed  !== undefined ? ac.moveSpeed  : 1.0;
+      guiControls.acHumidityL  = ac.humidity   || 0.0;
     }
     guiControls.acLabel    = ac.label || '';
     guiControls.acDropdown = ac.label + ' (' + ac.type + ')';
