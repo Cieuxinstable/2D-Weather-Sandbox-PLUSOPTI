@@ -554,8 +554,8 @@ void main()
   for (int ai = 0; ai < acWindCount; ai++) {
     if (acIsL[ai] > 0.5 && acHumidity[ai] > 0.001 && wall[DISTANCE] != 0) {
       float cy       = acCenterY[ai];           // vertical position of center (0-1)
-      float band     = 0.18;                    // half-width of injection band
-      float hDist    = absHorizontalDist(acWindData[ai].x, texCoord.x) / max(acWindRadX[ai], 0.0001);
+      float band     = 0.35;                    // half-width of injection band
+      float hDist    = absHorizontalDist(acWindData[ai].x, texCoord.x) / max(acWindRadX[ai] * 2.5, 0.0001);
       float hWeight  = smoothstep(1.0, 0.0, hDist);
       // bell shaped band centered on cy, fading over ±band
       float altFact  = smoothstep(cy - band, cy - band * 0.3, texCoord.y)
