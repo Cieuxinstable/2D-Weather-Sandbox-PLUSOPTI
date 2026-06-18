@@ -561,7 +561,7 @@ void main()
                      * smoothstep(cy + band, cy + band * 0.15, texCoord.y);
       float w        = hWeight * altFact;
       if (w > 0.001) {
-        float humStr  = acHumidity[ai] * acWindData[ai].z * w * 0.0002;
+        float humStr  = acHumidity[ai] * w * 0.001;
         water[TOTAL]  = min(water[TOTAL] + humStr, 10.0);
       }
     }
