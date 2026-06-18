@@ -5937,10 +5937,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     guiControls.acDropdown   = 'none';
     guiControls.acIntensityH = 5;
     guiControls.acTempH      = 2.0;
-    guiControls.acMoveH      = 1.0;
+    guiControls.acMoveH      = 0.1;
     guiControls.acIntensityL = 5;
     guiControls.acFluxL      = 0.0;
-    guiControls.acMoveL      = 1.0;
+    guiControls.acMoveL      = 0.1;
     guiControls.acWindAltL   = 1500;
     guiControls.acTempL      = -2.0;
     guiControls.acHumidityL  = 0.0;
@@ -11630,7 +11630,7 @@ var soundingGraph = {
             const maxAC = Math.min(actionCenters.length, 8);
             for (let ai = 0; ai < maxAC; ai++) {
               const ac        = actionCenters[ai];
-              const mv        = ac.moveSpeed !== undefined ? ac.moveSpeed : 1.0;
+              const mv        = ac.moveSpeed !== undefined ? ac.moveSpeed : 0.1;
               const dir       = mv > 0 ? 1.0 : (mv < 0 ? -1.0 : 0.0);
               const ramp      = ac.rampFactor !== undefined ? ac.rampFactor : 1.0;
               const normIntens = ((ac.intensity || 5) / 10.0) * ramp;
@@ -12726,13 +12726,13 @@ var soundingGraph = {
     if (ac.type === 'H') {
       guiControls.acIntensityH = ac.intensity  || 5;
       guiControls.acTempH      = ac.tempEffect !== undefined ? ac.tempEffect : 2.0;
-      guiControls.acMoveH      = ac.moveSpeed  !== undefined ? ac.moveSpeed  : 1.0;
+      guiControls.acMoveH      = ac.moveSpeed  !== undefined ? ac.moveSpeed  : 0.1;
     } else {
       guiControls.acIntensityL = ac.intensity  || 5;
       guiControls.acFluxL      = ac.flux       || 0.0;
       guiControls.acWindAltL   = ac.windAlt    || 1500;
       guiControls.acTempL      = ac.tempEffect !== undefined ? ac.tempEffect : -2.0;
-      guiControls.acMoveL      = ac.moveSpeed  !== undefined ? ac.moveSpeed  : 1.0;
+      guiControls.acMoveL      = ac.moveSpeed  !== undefined ? ac.moveSpeed  : 0.1;
       guiControls.acHumidityL  = ac.humidity   || 0.0;
     }
     guiControls.acLabel    = ac.label || '';
@@ -13014,7 +13014,7 @@ var soundingGraph = {
 
     for (const ac of actionCenters) {
       const intensity = ac.intensity  || 5;
-      const moveSpeed = ac.moveSpeed  !== undefined ? ac.moveSpeed : 1.0;
+      const moveSpeed = ac.moveSpeed  !== undefined ? ac.moveSpeed : 0.1;
       const windAlt   = ac.windAlt    || 1500;
 
       // ── Déplacement du centre ──────────────────────────────────────────
@@ -13068,7 +13068,7 @@ var soundingGraph = {
       const isH  = ac.type === 'H';
       const col  = isH ? 'rgba(220,60,60,' : 'rgba(60,120,220,';
       // Interpolate between physics steps using remaining accumulator time
-      const _ms  = ac.moveSpeed !== undefined ? ac.moveSpeed : 1.0;
+      const _ms  = ac.moveSpeed !== undefined ? ac.moveSpeed : 0.1;
       const interpX = (_ms !== 0 && !guiControls.paused)
         ? mod(ac.x + (_ms > 0 ? 1 : -1) * Math.abs(_ms) * 0.000003 * acAccumulator, 1.0)
         : ac.x;
