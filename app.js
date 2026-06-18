@@ -9696,7 +9696,6 @@ var soundingGraph = {
   const _acWindMoveXBuf = new Float32Array(8);
   const _acWindRadXBuf  = new Float32Array(8);
   const _acHumBuf       = new Float32Array(8);
-  const _acIsLBuf       = new Float32Array(8);
   const _acCenterYBuf   = new Float32Array(8);
   // Persistent readback buffers: avoids Float32Array(4) allocation on every fence completion
   const _thunderReadBuf  = new Float32Array(4);
@@ -11252,7 +11251,6 @@ var soundingGraph = {
   const _uloc_adv_acMoveX  = gl.getUniformLocation(advectionProgram,                   'acWindMoveX[0]');
   const _uloc_adv_acRadX   = gl.getUniformLocation(advectionProgram,                   'acWindRadX[0]');
   const _uloc_adv_acHum    = gl.getUniformLocation(advectionProgram,                   'acHumidity[0]');
-  const _uloc_adv_acIsL    = gl.getUniformLocation(advectionProgram,                   'acIsL[0]');
   const _uloc_adv_acCenterY= gl.getUniformLocation(advectionProgram,                   'acCenterY[0]');
   const _uloc_precip_iter  = gl.getUniformLocation(precipitationProgram,               'iterNum');
   const _uloc_lloc_iter    = gl.getUniformLocation(lightningLocationProgram,            'iterNum');
@@ -11639,9 +11637,9 @@ var soundingGraph = {
               const acPosX    = guiControls.wrapHorizontally ? mod(ac.x, 1.0) : clamp(ac.x, 0.0, 1.0);
               const windCeil  = (ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
               const radiusX   = ac.radius * sim_res_y / Math.max(sim_res_x, 1);
-              // H = 0 moveX (no directional wind, but does damp/dry/warm via shader)
-              // L = ±1 moveX (directional wind)
-              const moveX  = ac.type === 'L' ? dir : 0.0;
+              // H = exactly 0.0 (drying loop checks abs < 0.001)
+              // L moving = ±1.0 ; L stationary = 0.001 sentinel (non-zero, avoids H-drying, negligible wind)
+              const moveX  = ac.type === 'L' ? (dir !== 0.0 ? dir : 0.001) : 0.0;
               const tempFx = ac.tempEffect !== undefined ? ac.tempEffect : (ac.type === 'H' ? 2.0 : -2.0);
               _acWindData[_acWindCount * 4 + 0] = acPosX;
               _acWindData[_acWindCount * 4 + 1] = windCeil;
@@ -11650,7 +11648,6 @@ var soundingGraph = {
               _acWindMoveX[_acWindCount] = moveX;
               _acWindRadX [_acWindCount] = radiusX;
               _acHumBuf   [_acWindCount] = ac.type === 'L' ? (ac.humidity || 0.0) : 0.0;
-              _acIsLBuf   [_acWindCount] = ac.type === 'L' ? 1.0 : 0.0;
               _acCenterYBuf[_acWindCount] = ac.y;
               _acWindCount++;
             }
@@ -11732,7 +11729,6 @@ var soundingGraph = {
             gl.uniform1fv(_uloc_adv_acMoveX, _acWindMoveX);
             gl.uniform1fv(_uloc_adv_acRadX,  _acWindRadX);
             gl.uniform1fv(_uloc_adv_acHum,   _acHumBuf);
-            gl.uniform1fv(_uloc_adv_acIsL,    _acIsLBuf);
             gl.uniform1fv(_uloc_adv_acCenterY, _acCenterYBuf);
 
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
