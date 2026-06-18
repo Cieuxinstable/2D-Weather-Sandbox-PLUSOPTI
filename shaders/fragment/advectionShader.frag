@@ -557,12 +557,12 @@ void main()
       float band     = 0.35;                    // half-width of injection band
       float hDist    = absHorizontalDist(acWindData[ai].x, texCoord.x) / max(acWindRadX[ai] * 2.5, 0.0001);
       float hWeight  = smoothstep(1.0, 0.0, hDist);
-      // bell shaped band centered on cy, fading over ±band
-      float altFact  = smoothstep(cy - band, cy - band * 0.3, texCoord.y)
-                     * smoothstep(cy + band, cy + band * 0.3, texCoord.y);
+      // bell shaped band centered on cy — soft edges (0.15 transition zone)
+      float altFact  = smoothstep(cy - band, cy - band * 0.15, texCoord.y)
+                     * smoothstep(cy + band, cy + band * 0.15, texCoord.y);
       float w        = hWeight * altFact;
       if (w > 0.001) {
-        float humStr  = acHumidity[ai] * acWindData[ai].z * w * 0.001;
+        float humStr  = acHumidity[ai] * acWindData[ai].z * w * 0.0002;
         water[TOTAL]  = min(water[TOTAL] + humStr, 10.0);
       }
     }

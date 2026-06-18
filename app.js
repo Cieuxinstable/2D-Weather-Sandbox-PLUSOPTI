@@ -5999,7 +5999,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .onChange(function() { applyACSliders(); });
     ac_L_folder.add(guiControls, 'acTempL', -5, 5, 0.5).name('Temp effect (°C)').listen()
       .onChange(function() { applyACSliders(); });
-    ac_L_folder.add(guiControls, 'acHumidityL', 0.0, 5.0, 0.1).name('Moisture injection').listen()
+    ac_L_folder.add(guiControls, 'acHumidityL', 0.0, 2.0, 0.05).name('Moisture injection').listen()
       .onChange(function() { applyACSliders(); });
 
     var radiation_folder = datGui.addFolder('Radiation');
