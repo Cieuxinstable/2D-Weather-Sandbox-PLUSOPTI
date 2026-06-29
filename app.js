@@ -3459,6 +3459,7 @@ class LoadingBar
   }
 
   remove() {
+    this.loadingBar.style.pointerEvents = 'none'; // stop blocking input immediately
     this.loadingBar.style.opacity = '0';
     setTimeout(() => {
       if (this.loadingBar.parentNode)

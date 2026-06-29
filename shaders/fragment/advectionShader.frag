@@ -561,8 +561,9 @@ void main()
                      * smoothstep(cy + band, cy + band * 0.15, texCoord.y);
       float w        = hWeight * altFact;
       if (w > 0.001) {
-        float humStr  = acHumidity[ai] * w * 0.00002;
-        water[TOTAL]  = min(water[TOTAL] + humStr, 10.0);
+        float humStr   = acHumidity[ai] * w * 0.00002;
+        float satLimit = maxWater(realTemp) * 0.95; // cap at 95% RH — clouds form naturally
+        water[TOTAL]   = min(water[TOTAL] + humStr, satLimit);
       }
     }
   }
