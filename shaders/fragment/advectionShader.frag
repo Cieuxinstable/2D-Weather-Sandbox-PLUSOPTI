@@ -561,9 +561,11 @@ void main()
                      * smoothstep(cy + band, cy + band * 0.15, texCoord.y);
       float w        = hWeight * altFact;
       if (w > 0.001) {
-        float humStr   = acHumidity[ai] * w * 0.00002;
-        float satLimit = maxWater(realTemp) * 0.95; // cap at 95% RH — clouds form naturally
-        water[TOTAL]   = min(water[TOTAL] + humStr, satLimit);
+        float maxW    = maxWater(realTemp);
+        float satFrac = clamp(water[TOTAL] / max(maxW, 0.0001), 0.0, 1.0);
+        float deficit = 1.0 - satFrac;           // 1=dry, 0=saturated — injection slows naturally
+        float humStr  = acHumidity[ai] * w * deficit * maxW * 0.015;
+        water[TOTAL]  = min(water[TOTAL] + humStr, maxW * 0.90); // never exceed 90% RH
       }
     }
   }

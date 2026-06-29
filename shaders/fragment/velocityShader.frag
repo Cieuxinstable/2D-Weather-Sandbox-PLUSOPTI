@@ -17,11 +17,13 @@ uniform float wind;
 uniform float windMaxAlt; // 0.0-1.0 normalized height limit for wind injection
 
 // Action center wind/temp injection (up to 8 centers)
-// acWindData: x=centerX, y=windCeiling(norm 0-1), z=normIntens(0-1), w=tempEffect
+// acWindData: x=centerX, y=windCeiling(norm, for H drying in advection), z=normIntens(0-1), w=tempEffect
 uniform int   acWindCount;
 uniform vec4  acWindData[8];
-uniform float acWindMoveX[8];  // ±1 for L direction, 0 for H (no directional wind)
-uniform float acWindRadX[8];   // horizontal radius of influence (sim-space)
+uniform float acWindMoveX[8];    // ±1 for L direction, 0.001 stationary L, 0 for H
+uniform float acWindRadX[8];     // horizontal radius of influence (sim-space)
+uniform float acWindAltMin[8];   // wind band min altitude (normalized 0-1)
+uniform float acWindAltMax[8];   // wind band max altitude (normalized 0-1)
 
 uniform vec2 texelSize;
 // uniform vec2 resolution;
@@ -76,11 +78,14 @@ void main()
 
     // Action center wind + temperature effect
     for (int ai = 0; ai < acWindCount; ai++) {
-      float ceiling = acWindData[ai].y;                    // max wind altitude (norm)
       float hDist   = absHorizontalDist(acWindData[ai].x, texCoord.x) / max(acWindRadX[ai], 0.0001);
       float hWeight = smoothstep(1.0, 0.0, hDist);
-      // wind fades out above the ceiling (strongest near ground)
-      float altFact = ceiling > 0.001 ? smoothstep(ceiling, ceiling * 0.15, texCoord.y) : 1.0;
+      // wind band: full weight between altMin and altMax, soft edges
+      float altMin  = acWindAltMin[ai];
+      float altMax  = max(acWindAltMax[ai], altMin + 0.01); // guard min > max
+      float tran    = max((altMax - altMin) * 0.25, 0.02);
+      float altFact = smoothstep(altMin - tran, altMin, texCoord.y)
+                    * smoothstep(altMax + tran, altMax, texCoord.y);
       float w       = hWeight * altFact;
 
       if (w > 0.001) {

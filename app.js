@@ -5936,15 +5936,18 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     // ── Selected center dropdown (rebuilt dynamically when centers change) ─
     guiControls.acDropdown   = 'none';
-    guiControls.acIntensityH = 5;
-    guiControls.acTempH      = 2.0;
-    guiControls.acMoveH      = 0.1;
-    guiControls.acIntensityL = 5;
-    guiControls.acFluxL      = 0.0;
-    guiControls.acMoveL      = 0.1;
-    guiControls.acWindAltL   = 1500;
-    guiControls.acTempL      = -2.0;
-    guiControls.acHumidityL  = 0.0;
+    guiControls.acIntensityH  = 5;
+    guiControls.acTempH       = 2.0;
+    guiControls.acMoveH       = 0.1;
+    guiControls.acWindAltMinH = 1500;
+    guiControls.acWindAltMaxH = 5000;
+    guiControls.acIntensityL  = 5;
+    guiControls.acFluxL       = 0.0;
+    guiControls.acMoveL       = 0.1;
+    guiControls.acWindAltMinL = 1500;
+    guiControls.acWindAltMaxL = 5000;
+    guiControls.acTempL       = -2.0;
+    guiControls.acHumidityL   = 0.0;
     guiControls.acLabel      = '';
 
     var _acDropdownController = null;
@@ -5980,6 +5983,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         const ac = actionCenters[idx];
         if (ac && ac.type === 'H') ac.moveSpeed = guiControls.acMoveH;
       });
+    ac_H_folder.add(guiControls, 'acWindAltMinH', 0, 15000, 100).name('Wind alt. min (m)').listen()
+      .onChange(function() { applyACSliders(); });
+    ac_H_folder.add(guiControls, 'acWindAltMaxH', 0, 15000, 100).name('Wind alt. max (m)').listen()
+      .onChange(function() { applyACSliders(); });
     ac_H_folder.add(guiControls, 'acTempH', -5, 5, 0.5).name('Temp effect (°C)').listen()
       .onChange(function() { applyACSliders(); });
 
@@ -5996,7 +6003,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         const ac = actionCenters[idx];
         if (ac && ac.type === 'L') ac.moveSpeed = guiControls.acMoveL;
       });
-    ac_L_folder.add(guiControls, 'acWindAltL', 100, 15000, 100).name('Wind ceiling (m)').listen()
+    ac_L_folder.add(guiControls, 'acWindAltMinL', 0, 15000, 100).name('Wind alt. min (m)').listen()
+      .onChange(function() { applyACSliders(); });
+    ac_L_folder.add(guiControls, 'acWindAltMaxL', 0, 15000, 100).name('Wind alt. max (m)').listen()
       .onChange(function() { applyACSliders(); });
     ac_L_folder.add(guiControls, 'acTempL', -5, 5, 0.5).name('Temp effect (°C)').listen()
       .onChange(function() { applyACSliders(); });
@@ -9696,8 +9705,10 @@ var soundingGraph = {
   const _acWindDataBuf  = new Float32Array(8 * 4);
   const _acWindMoveXBuf = new Float32Array(8);
   const _acWindRadXBuf  = new Float32Array(8);
-  const _acHumBuf       = new Float32Array(8);
-  const _acCenterYBuf   = new Float32Array(8);
+  const _acHumBuf        = new Float32Array(8);
+  const _acCenterYBuf    = new Float32Array(8);
+  const _acWindAltMinBuf = new Float32Array(8);
+  const _acWindAltMaxBuf = new Float32Array(8);
   // Persistent readback buffers: avoids Float32Array(4) allocation on every fence completion
   const _thunderReadBuf  = new Float32Array(4);
   const _dropletReadBuf  = new Float32Array(4);
@@ -11247,6 +11258,8 @@ var soundingGraph = {
   const _uloc_vel_acData   = gl.getUniformLocation(velocityProgram,                    'acWindData[0]');
   const _uloc_vel_acMoveX  = gl.getUniformLocation(velocityProgram,                    'acWindMoveX[0]');
   const _uloc_vel_acRadX   = gl.getUniformLocation(velocityProgram,                    'acWindRadX[0]');
+  const _uloc_vel_acAltMin = gl.getUniformLocation(velocityProgram,                    'acWindAltMin[0]');
+  const _uloc_vel_acAltMax = gl.getUniformLocation(velocityProgram,                    'acWindAltMax[0]');
   const _uloc_adv_acCount  = gl.getUniformLocation(advectionProgram,                   'acWindCount');
   const _uloc_adv_acData   = gl.getUniformLocation(advectionProgram,                   'acWindData[0]');
   const _uloc_adv_acMoveX  = gl.getUniformLocation(advectionProgram,                   'acWindMoveX[0]');
@@ -11542,7 +11555,9 @@ var soundingGraph = {
               moveSpeed : type === 'H' ? guiControls.acMoveH : guiControls.acMoveL,
               corePressure : type === 'H' ? 1025 : 990,
               rampFactor : 0.0,
-              windAlt    : type === 'H' ? (guiControls.simHeight || sim_height) : (guiControls.acWindAltL || 1500),
+              windAlt    : type === 'H' ? (guiControls.simHeight || sim_height) : undefined,
+              windAltMin : type === 'H' ? guiControls.acWindAltMinH : guiControls.acWindAltMinL,
+              windAltMax : type === 'H' ? guiControls.acWindAltMaxH : guiControls.acWindAltMaxL,
               tempEffect : type === 'H' ? 2.0 : -2.0,
               humidity   : type === 'L' ? (guiControls.acHumidityL || 0.0) : 0.0,
             };
@@ -11552,16 +11567,19 @@ var soundingGraph = {
             guiControls.acDropdown = newAC.label + ' (' + newAC.type + ')';
             if (rebuildACDropdown) rebuildACDropdown();
             if (type === 'H') {
-              guiControls.acIntensityH = newAC.intensity;
-              guiControls.acTempH      = newAC.tempEffect;
-              guiControls.acMoveH      = newAC.moveSpeed;
+              guiControls.acIntensityH  = newAC.intensity;
+              guiControls.acTempH       = newAC.tempEffect;
+              guiControls.acMoveH       = newAC.moveSpeed;
+              guiControls.acWindAltMinH = newAC.windAltMin;
+              guiControls.acWindAltMaxH = newAC.windAltMax;
             } else {
-              guiControls.acIntensityL = newAC.intensity;
-              guiControls.acFluxL      = newAC.flux      || 0.0;
-              guiControls.acWindAltL   = newAC.windAlt;
-              guiControls.acTempL      = newAC.tempEffect;
-              guiControls.acMoveL      = newAC.moveSpeed;
-              guiControls.acHumidityL  = newAC.humidity  || 0.0;
+              guiControls.acIntensityL  = newAC.intensity;
+              guiControls.acFluxL       = newAC.flux      || 0.0;
+              guiControls.acWindAltMinL = newAC.windAltMin;
+              guiControls.acWindAltMaxL = newAC.windAltMax;
+              guiControls.acTempL       = newAC.tempEffect;
+              guiControls.acMoveL       = newAC.moveSpeed;
+              guiControls.acHumidityL   = newAC.humidity  || 0.0;
             }
             guiControls.acLabel     = newAC.label;
             } // end else (not clicking existing center)
@@ -11636,8 +11654,11 @@ var soundingGraph = {
               const ramp      = ac.rampFactor !== undefined ? ac.rampFactor : 1.0;
               const normIntens = ((ac.intensity || 5) / 10.0) * ramp;
               const acPosX    = guiControls.wrapHorizontally ? mod(ac.x, 1.0) : clamp(ac.x, 0.0, 1.0);
-              const windCeil  = (ac.windAlt || 1500) / Math.max(guiControls.simHeight, 1000);
+              const simH      = Math.max(guiControls.simHeight, 1000);
+              const windCeil  = (ac.windAlt !== undefined ? ac.windAlt : (ac.type === 'H' ? guiControls.simHeight : simH)) / simH;
               const radiusX   = ac.radius * sim_res_y / Math.max(sim_res_x, 1);
+              const altMin    = (ac.windAltMin !== undefined ? ac.windAltMin : 1500) / simH;
+              const altMax    = (ac.windAltMax !== undefined ? ac.windAltMax : 5000) / simH;
               // H = exactly 0.0 (drying loop checks abs < 0.001)
               // L moving = ±1.0 ; L stationary = 0.001 sentinel (non-zero, avoids H-drying, negligible wind)
               const moveX  = ac.type === 'L' ? (dir !== 0.0 ? dir : 0.001) : 0.0;
@@ -11648,8 +11669,10 @@ var soundingGraph = {
               _acWindData[_acWindCount * 4 + 3] = tempFx;
               _acWindMoveX[_acWindCount] = moveX;
               _acWindRadX [_acWindCount] = radiusX;
-              _acHumBuf   [_acWindCount] = ac.type === 'L' ? (ac.humidity || 0.0) : 0.0;
-              _acCenterYBuf[_acWindCount] = ac.y;
+              _acHumBuf       [_acWindCount] = ac.type === 'L' ? (ac.humidity || 0.0) : 0.0;
+              _acCenterYBuf   [_acWindCount] = ac.y;
+              _acWindAltMinBuf[_acWindCount] = altMin;
+              _acWindAltMaxBuf[_acWindCount] = altMax;
               _acWindCount++;
             }
           }
@@ -11666,10 +11689,12 @@ var soundingGraph = {
             gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_1);
             gl.drawBuffers([ gl.COLOR_ATTACHMENT0, gl.NONE, gl.COLOR_ATTACHMENT2 ]);
             // Upload AC wind forces (injected here so they survive advection + pressure)
-            gl.uniform1i(_uloc_vel_acCount, _acWindCount);
+            gl.uniform1i(_uloc_vel_acCount,  _acWindCount);
             gl.uniform4fv(_uloc_vel_acData,  _acWindData);
             gl.uniform1fv(_uloc_vel_acMoveX, _acWindMoveX);
             gl.uniform1fv(_uloc_vel_acRadX,  _acWindRadX);
+            gl.uniform1fv(_uloc_vel_acAltMin, _acWindAltMinBuf);
+            gl.uniform1fv(_uloc_vel_acAltMax, _acWindAltMaxBuf);
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
             // Curl + vorticity: skip odd iterations on large maps; always run when user is actively painting
@@ -12705,14 +12730,17 @@ var soundingGraph = {
     if (idx < 0) return;
     const ac = actionCenters[idx];
     if (ac.type === 'H') {
-      ac.intensity  = guiControls.acIntensityH;
-      ac.tempEffect = guiControls.acTempH;
+      ac.intensity   = guiControls.acIntensityH;
+      ac.tempEffect  = guiControls.acTempH;
+      ac.windAltMin  = guiControls.acWindAltMinH;
+      ac.windAltMax  = guiControls.acWindAltMaxH;
     } else {
-      ac.intensity  = guiControls.acIntensityL;
-      ac.flux       = guiControls.acFluxL;
-      ac.windAlt    = guiControls.acWindAltL;
-      ac.tempEffect = guiControls.acTempL;
-      ac.humidity   = guiControls.acHumidityL;
+      ac.intensity   = guiControls.acIntensityL;
+      ac.flux        = guiControls.acFluxL;
+      ac.windAltMin  = guiControls.acWindAltMinL;
+      ac.windAltMax  = guiControls.acWindAltMaxL;
+      ac.tempEffect  = guiControls.acTempL;
+      ac.humidity    = guiControls.acHumidityL;
     }
     if (guiControls.acLabel && guiControls.acLabel.trim() !== '') {
       ac.label = guiControls.acLabel.trim();
@@ -12725,16 +12753,19 @@ var soundingGraph = {
     if (idx < 0 || idx >= actionCenters.length) return;
     const ac = actionCenters[idx];
     if (ac.type === 'H') {
-      guiControls.acIntensityH = ac.intensity  || 5;
-      guiControls.acTempH      = ac.tempEffect !== undefined ? ac.tempEffect : 2.0;
-      guiControls.acMoveH      = ac.moveSpeed  !== undefined ? ac.moveSpeed  : 0.1;
+      guiControls.acIntensityH  = ac.intensity  || 5;
+      guiControls.acTempH       = ac.tempEffect !== undefined ? ac.tempEffect : 2.0;
+      guiControls.acMoveH       = ac.moveSpeed  !== undefined ? ac.moveSpeed  : 0.1;
+      guiControls.acWindAltMinH = ac.windAltMin !== undefined ? ac.windAltMin : 1500;
+      guiControls.acWindAltMaxH = ac.windAltMax !== undefined ? ac.windAltMax : 5000;
     } else {
-      guiControls.acIntensityL = ac.intensity  || 5;
-      guiControls.acFluxL      = ac.flux       || 0.0;
-      guiControls.acWindAltL   = ac.windAlt    || 1500;
-      guiControls.acTempL      = ac.tempEffect !== undefined ? ac.tempEffect : -2.0;
-      guiControls.acMoveL      = ac.moveSpeed  !== undefined ? ac.moveSpeed  : 0.1;
-      guiControls.acHumidityL  = ac.humidity   || 0.0;
+      guiControls.acIntensityL  = ac.intensity  || 5;
+      guiControls.acFluxL       = ac.flux       || 0.0;
+      guiControls.acWindAltMinL = ac.windAltMin !== undefined ? ac.windAltMin : 1500;
+      guiControls.acWindAltMaxL = ac.windAltMax !== undefined ? ac.windAltMax : 5000;
+      guiControls.acTempL       = ac.tempEffect !== undefined ? ac.tempEffect : -2.0;
+      guiControls.acMoveL       = ac.moveSpeed  !== undefined ? ac.moveSpeed  : 0.1;
+      guiControls.acHumidityL   = ac.humidity   || 0.0;
     }
     guiControls.acLabel    = ac.label || '';
     guiControls.acDropdown = ac.label + ' (' + ac.type + ')';
