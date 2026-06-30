@@ -24,6 +24,7 @@ uniform float acWindMoveX[8];    // ±1 for L direction, 0.001 stationary L, 0 f
 uniform float acWindRadX[8];     // horizontal radius of influence (sim-space)
 uniform float acWindAltMin[8];   // wind band min altitude (normalized 0-1)
 uniform float acWindAltMax[8];   // wind band max altitude (normalized 0-1)
+uniform float acWindBg[8];       // background wind intensity (L only, no altitude restriction)
 
 uniform vec2 texelSize;
 // uniform vec2 resolution;
@@ -80,29 +81,50 @@ void main()
     for (int ai = 0; ai < acWindCount; ai++) {
       float hDist   = absHorizontalDist(acWindData[ai].x, texCoord.x) / max(acWindRadX[ai], 0.0001);
       float hWeight = smoothstep(1.0, 0.0, hDist);
-      // wind band: bell-shaped profile with very wide transitions to minimise
-      // vertical shear — narrow transitions cause Kelvin-Helmholtz instability
-      float altMin  = acWindAltMin[ai];
-      float altMax  = max(acWindAltMax[ai], altMin + 0.01); // guard min > max
-      float tran    = max((altMax - altMin) * 0.75, 0.05);  // 75% of band each side → gentle gradient
-      float altFact = smoothstep(altMin - tran, altMin, texCoord.y)
-                    * smoothstep(altMax + tran, altMax, texCoord.y);
-      float w       = hWeight * altFact;
 
-      if (w > 0.001) {
-        if (abs(acWindMoveX[ai]) > 0.001) {
-          // L center: inject directional wind — low blendStr cap avoids abrupt forcing at band edge
+      if (abs(acWindMoveX[ai]) > 0.001) {
+        // L center — two-component wind:
+
+        // 1) Background wind: no altitude filter, very gentle uniform drift
+        float bgIntens = acWindBg[ai];
+        if (bgIntens > 0.0001 && hWeight > 0.001) {
+          float bgTarget = acWindMoveX[ai] * bgIntens * 0.08;
+          float bgBlend  = clamp(hWeight * 0.006, 0.0, 0.02);
+          base[VX] = mix(base[VX], bgTarget, bgBlend);
+        }
+
+        // 2) Band wind: localized between altMin/altMax — 45% transitions avoid KH while staying localized
+        float altMin  = acWindAltMin[ai];
+        float altMax  = max(acWindAltMax[ai], altMin + 0.01);
+        float tran    = max((altMax - altMin) * 0.45, 0.04);
+        float altFact = smoothstep(altMin - tran, altMin, texCoord.y)
+                      * smoothstep(altMax + tran, altMax, texCoord.y);
+        float w       = hWeight * altFact;
+        if (w > 0.001) {
           float targetVX = acWindMoveX[ai] * 0.12 * acWindData[ai].z;
-          float blendStr = clamp(w * 0.04, 0.0, 0.15);
+          float blendStr = clamp(w * 0.04, 0.0, 0.12);
           base[VX] = mix(base[VX], targetVX, blendStr);
-        } else {
-          // H center: calm wind progressively toward 0 at the core (anticyclone = high pressure = calm)
+        }
+
+        // Temperature effect (band-localized)
+        if (w > 0.001) {
+          base[TEMPERATURE] += acWindData[ai].w * 0.0001 * w * acWindData[ai].z;
+        }
+
+      } else {
+        // H center: calm wind progressively toward 0 at the core
+        float altMin  = acWindAltMin[ai];
+        float altMax  = max(acWindAltMax[ai], altMin + 0.01);
+        float tran    = max((altMax - altMin) * 0.45, 0.04);
+        float altFact = smoothstep(altMin - tran, altMin, texCoord.y)
+                      * smoothstep(altMax + tran, altMax, texCoord.y);
+        float w       = hWeight * altFact;
+        if (w > 0.001) {
           float dampStr = clamp(w * 0.015 * acWindData[ai].z, 0.0, 0.12);
           base[VX] *= (1.0 - dampStr);
           base[VY] *= (1.0 - dampStr);
+          base[TEMPERATURE] += acWindData[ai].w * 0.0001 * w * acWindData[ai].z;
         }
-        // Temperature effect: acWindData.w > 0 = H (warming), < 0 = L (cooling)
-        base[TEMPERATURE] += acWindData[ai].w * 0.0001 * w * acWindData[ai].z;
       }
     }
   }

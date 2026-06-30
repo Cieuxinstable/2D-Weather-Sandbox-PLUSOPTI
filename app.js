@@ -5956,6 +5956,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     guiControls.acWindAltMaxL = 5000;
     guiControls.acTempL       = -2.0;
     guiControls.acHumidityL   = 0.0;
+    guiControls.acWindBgL     = 0.0;
     guiControls.acLabel      = '';
 
     var _acDropdownController = null;
@@ -6001,7 +6002,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     // ── L (Depression) parameters ──────────────────────────────────────────
     var ac_L_folder = pressure_folder.addFolder('L — Depression');
-    ac_L_folder.add(guiControls, 'acIntensityL', 1, 10, 1).name('Intensity 1-10').listen()
+    ac_L_folder.add(guiControls, 'acIntensityL', 1, 10, 1).name('Vent de bande (1-10)').listen()
+      .onChange(function() { applyACSliders(); });
+    ac_L_folder.add(guiControls, 'acWindBgL', 0.0, 1.0, 0.01).name('Vent de fond (0-1)').listen()
       .onChange(function() { applyACSliders(); });
     ac_L_folder.add(guiControls, 'acFluxL', -1.0, 1.0, 0.1).name('Flux N<0 S>0').listen()
       .onChange(function() { applyACSliders(); });
@@ -9718,6 +9721,7 @@ var soundingGraph = {
   const _acCenterYBuf    = new Float32Array(8);
   const _acWindAltMinBuf = new Float32Array(8);
   const _acWindAltMaxBuf = new Float32Array(8);
+  const _acWindBgBuf     = new Float32Array(8);
   // Persistent readback buffers: avoids Float32Array(4) allocation on every fence completion
   const _thunderReadBuf  = new Float32Array(4);
   const _dropletReadBuf  = new Float32Array(4);
@@ -11269,6 +11273,7 @@ var soundingGraph = {
   const _uloc_vel_acRadX   = gl.getUniformLocation(velocityProgram,                    'acWindRadX[0]');
   const _uloc_vel_acAltMin = gl.getUniformLocation(velocityProgram,                    'acWindAltMin[0]');
   const _uloc_vel_acAltMax = gl.getUniformLocation(velocityProgram,                    'acWindAltMax[0]');
+  const _uloc_vel_acBg     = gl.getUniformLocation(velocityProgram,                    'acWindBg[0]');
   const _uloc_adv_acCount  = gl.getUniformLocation(advectionProgram,                   'acWindCount');
   const _uloc_adv_acData   = gl.getUniformLocation(advectionProgram,                   'acWindData[0]');
   const _uloc_adv_acMoveX  = gl.getUniformLocation(advectionProgram,                   'acWindMoveX[0]');
@@ -11574,6 +11579,7 @@ var soundingGraph = {
               windAltMax : type === 'H' ? guiControls.acWindAltMaxH : guiControls.acWindAltMaxL,
               tempEffect : type === 'H' ? 2.0 : -2.0,
               humidity   : type === 'L' ? (guiControls.acHumidityL || 0.0) : 0.0,
+              windBg     : type === 'L' ? (guiControls.acWindBgL   || 0.0) : 0.0,
             };
             actionCenters.push(newAC);
             // Auto-select newly placed center
@@ -11594,6 +11600,7 @@ var soundingGraph = {
               guiControls.acTempL       = newAC.tempEffect;
               guiControls.acMoveL       = newAC.moveSpeed;
               guiControls.acHumidityL   = newAC.humidity  || 0.0;
+              guiControls.acWindBgL     = newAC.windBg    || 0.0;
             }
             guiControls.acLabel     = newAC.label;
             } // end else (not clicking existing center)
@@ -11689,6 +11696,7 @@ var soundingGraph = {
               _acCenterYBuf   [_acWindCount] = ac.y;
               _acWindAltMinBuf[_acWindCount] = altMin;
               _acWindAltMaxBuf[_acWindCount] = altMax;
+              _acWindBgBuf    [_acWindCount] = ac.type === 'L' ? (ac.windBg || 0.0) : 0.0;
               _acWindCount++;
             }
           }
@@ -11711,6 +11719,7 @@ var soundingGraph = {
             gl.uniform1fv(_uloc_vel_acRadX,  _acWindRadX);
             gl.uniform1fv(_uloc_vel_acAltMin, _acWindAltMinBuf);
             gl.uniform1fv(_uloc_vel_acAltMax, _acWindAltMaxBuf);
+            gl.uniform1fv(_uloc_vel_acBg,     _acWindBgBuf);
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
             // Curl + vorticity: skip odd iterations on large maps; always run when user is actively painting
@@ -12786,6 +12795,7 @@ var soundingGraph = {
       ac.windAltMax  = guiControls.acWindAltMaxL;
       ac.tempEffect  = guiControls.acTempL;
       ac.humidity    = guiControls.acHumidityL;
+      ac.windBg      = guiControls.acWindBgL;
     }
     if (guiControls.acLabel && guiControls.acLabel.trim() !== '') {
       ac.label = guiControls.acLabel.trim();
@@ -12811,6 +12821,7 @@ var soundingGraph = {
       guiControls.acTempL       = ac.tempEffect !== undefined ? ac.tempEffect : -2.0;
       guiControls.acMoveL       = ac.moveSpeed  !== undefined ? ac.moveSpeed  : 0.1;
       guiControls.acHumidityL   = ac.humidity   || 0.0;
+      guiControls.acWindBgL     = ac.windBg     || 0.0;
     }
     guiControls.acLabel    = ac.label || '';
     guiControls.acDropdown = ac.label + ' (' + ac.type + ')';
