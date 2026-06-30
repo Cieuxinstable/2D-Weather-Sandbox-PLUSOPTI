@@ -1317,6 +1317,13 @@ var sim_res_y;
 var sim_aspect; //  = sim_res_x / sim_res_y
 var sim_height = 12000;
 
+// ── Action center auto-scaling reference map ─────────────────────────────
+// Default UI map (3000×300, 12000m). Values calibrated for this map;
+// scale factors are ratios vs. current map so sliders stay in natural units.
+const AC_REF_RES_X  = 3000;
+const AC_REF_RES_Y  = 300;
+const AC_REF_HEIGHT = 12000;
+
 var cellHeight = 12000. / 300.; // guiControls.simHeight / sim_res_y;  // in meters // cell width is the same
 
 var frameNum = 0;
@@ -5935,6 +5942,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     }}, 'deleteSelected').name('Delete selected H/L');
 
     // ── Selected center dropdown (rebuilt dynamically when centers change) ─
+    guiControls.acAutoScale  = true;
     guiControls.acDropdown   = 'none';
     guiControls.acIntensityH  = 5;
     guiControls.acTempH       = 2.0;
@@ -5971,6 +5979,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     pressure_folder.add(guiControls, 'acLabel').name('Rename [enter]').listen()
       .onChange(function() { applyACSliders(); if (rebuildACDropdown) rebuildACDropdown(); });
+    pressure_folder.add(guiControls, 'acAutoScale').name('Auto-scale (map size)').listen();
 
     // ── H (Anticyclone) parameters ─────────────────────────────────────────
     var ac_H_folder = pressure_folder.addFolder('H — Anticyclone');
@@ -11543,16 +11552,21 @@ var soundingGraph = {
             else {
 
             const radiusNorm = guiControls.brushSize * 0.5 / sim_res_y;
+            const _sf        = guiControls.acAutoScale ? getACScaleFactors() : null;
+            const _placedRadius    = _sf ? _sf.radiusAbs : radiusNorm * 4.0;
+            const _placedMoveSpeed = _sf
+              ? (type === 'H' ? guiControls.acMoveH : guiControls.acMoveL) * _sf.moveSpeedMult
+              : (type === 'H' ? guiControls.acMoveH : guiControls.acMoveL);
             const newAC = {
               type      : type,
               x         : mod(mouseXinSim, 1.0),
               y         : clamp(mouseYinSim, 0.0, 1.0),
-              radius    : radiusNorm * 4.0,
+              radius    : _placedRadius,
               label     : type + (actionCenters.length + 1),
               intensity : 5,
               dirEast   : true,
               speed     : 0.0,
-              moveSpeed : type === 'H' ? guiControls.acMoveH : guiControls.acMoveL,
+              moveSpeed : _placedMoveSpeed,
               corePressure : type === 'H' ? 1025 : 990,
               rampFactor : 0.0,
               windAlt    : type === 'H' ? (guiControls.simHeight || sim_height) : undefined,
@@ -11645,6 +11659,7 @@ var soundingGraph = {
           const _acWindData  = _acWindDataBuf;
           const _acWindMoveX = _acWindMoveXBuf;
           const _acWindRadX  = _acWindRadXBuf;
+          const _acScaleF    = guiControls.acAutoScale ? getACScaleFactors() : null;
           if (guiControls.actionCentersEnabled && actionCenters.length > 0) {
             const maxAC = Math.min(actionCenters.length, 8);
             for (let ai = 0; ai < maxAC; ai++) {
@@ -11652,7 +11667,8 @@ var soundingGraph = {
               const mv        = ac.moveSpeed !== undefined ? ac.moveSpeed : 0.1;
               const dir       = mv > 0 ? 1.0 : (mv < 0 ? -1.0 : 0.0);
               const ramp      = ac.rampFactor !== undefined ? ac.rampFactor : 1.0;
-              const normIntens = ((ac.intensity || 5) / 10.0) * ramp;
+              const _iMult    = _acScaleF ? _acScaleF.intensityMult : 1.0;
+              const normIntens = ((ac.intensity || 5) / 10.0) * ramp * _iMult;
               const acPosX    = guiControls.wrapHorizontally ? mod(ac.x, 1.0) : clamp(ac.x, 0.0, 1.0);
               const simH      = Math.max(guiControls.simHeight, 1000);
               const windCeil  = (ac.windAlt !== undefined ? ac.windAlt : (ac.type === 'H' ? guiControls.simHeight : simH)) / simH;
@@ -12722,6 +12738,35 @@ var soundingGraph = {
 
   // Index du centre sélectionné (dernier placé par défaut)
   let selectedACIndex = -1;
+
+  // ── Action center scale factors ────────────────────────────────────────
+  // Returns multipliers relative to the reference map (AC_REF_*).
+  // radiusAbs    : ac.radius value that covers AC_TARGET_RADIUS_FRAC of display width
+  // intensityMult: multiply normIntens so wind km/h stays constant despite cell-height changes
+  // moveSpeedMult: multiply moveSpeed so visual traversal rate scales with map width
+  const AC_TARGET_RADIUS_FRAC = 0.04; // 4 % of display width — calibrated on reference map
+
+  function getACScaleFactors() {
+    const resX = Math.max(sim_res_x,  1);
+    const resY = Math.max(sim_res_y,  1);
+    const simH = Math.max(guiControls.simHeight || sim_height, 1000);
+
+    // Radius: keep the same fraction of display width regardless of aspect ratio
+    // radiusX = radius * resY / resX  →  radius = target_frac * resX / resY
+    const radiusAbs = AC_TARGET_RADIUS_FRAC * resX / resY;
+
+    // Wind intensity: physical wind speed ∝ cellHeight = simH / resY
+    // scale so the same slider value always means the same km/h
+    const refCellH = AC_REF_HEIGHT / AC_REF_RES_Y;   // reference cell height (m)
+    const curCellH = simH / resY;                     // current cell height (m)
+    const intensityMult = refCellH / curCellH;        // <1 when cells bigger → less force
+
+    // Movement speed: scale so visual traversal-rate per hour is proportional to map width
+    // (keeps centre traversal time ≈ constant regardless of sim_res_x)
+    const moveSpeedMult = resX / AC_REF_RES_X;
+
+    return { radiusAbs, intensityMult, moveSpeedMult };
+  }
 
   function applyACSliders() {
     const idx = selectedACIndex >= 0 && selectedACIndex < actionCenters.length
