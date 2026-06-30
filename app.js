@@ -5949,11 +5949,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     guiControls.acMoveH       = 0.1;
     guiControls.acWindAltMinH = 1500;
     guiControls.acWindAltMaxH = 5000;
-    guiControls.acIntensityL  = 5;
+    guiControls.acIntensityL  = 3;
     guiControls.acFluxL       = 0.0;
     guiControls.acMoveL       = 0.1;
-    guiControls.acWindAltMinL = 1500;
-    guiControls.acWindAltMaxL = 5000;
+    guiControls.acWindAltMinL = 2000;
+    guiControls.acWindAltMaxL = 7000;
     guiControls.acTempL       = -2.0;
     guiControls.acHumidityL   = 0.0;
     guiControls.acWindBgL     = 0.0;
@@ -11559,16 +11559,15 @@ var soundingGraph = {
             const radiusNorm = guiControls.brushSize * 0.5 / sim_res_y;
             const _sf        = guiControls.acAutoScale ? getACScaleFactors() : null;
             const _placedRadius    = _sf ? _sf.radiusAbs : radiusNorm * 4.0;
-            const _placedMoveSpeed = _sf
-              ? (type === 'H' ? guiControls.acMoveH : guiControls.acMoveL) * _sf.moveSpeedMult
-              : (type === 'H' ? guiControls.acMoveH : guiControls.acMoveL);
+            const _placedMoveSpeed = type === 'H' ? guiControls.acMoveH : guiControls.acMoveL;
+            // moveSpeedMult applied inside updateActionCenters — ac.moveSpeed stores raw UI value
             const newAC = {
               type      : type,
               x         : mod(mouseXinSim, 1.0),
               y         : clamp(mouseYinSim, 0.0, 1.0),
               radius    : _placedRadius,
               label     : type + (actionCenters.length + 1),
-              intensity : 5,
+              intensity : type === 'H' ? guiControls.acIntensityH : guiControls.acIntensityL,
               dirEast   : true,
               speed     : 0.0,
               moveSpeed : _placedMoveSpeed,
@@ -13095,6 +13094,10 @@ var soundingGraph = {
       return;
     }
 
+    // moveSpeedMult scales raw UI speed so traversal is map-width-independent
+    const _sfAC = guiControls.acAutoScale ? getACScaleFactors() : null;
+    const _msMult = _sfAC ? _sfAC.moveSpeedMult : 1.0;
+
     let totalMoveX   = 0.0;
     let totalIntens  = 0.0;
     let totalAltY    = 0.0;
@@ -13107,7 +13110,7 @@ var soundingGraph = {
 
       // ── Déplacement du centre ──────────────────────────────────────────
       if (moveSpeed !== 0) {
-        const speedPerMs = Math.abs(moveSpeed) * 0.000003;
+        const speedPerMs = Math.abs(moveSpeed) * _msMult * 0.000003;
         ac.x = mod(ac.x + (moveSpeed > 0 ? 1 : -1) * speedPerMs * dt, 1.0);
       }
 
@@ -13151,6 +13154,8 @@ var soundingGraph = {
 
     const isobarStep  = 4;
     const isobarCount = 2;
+    const _sfDraw  = guiControls.acAutoScale ? getACScaleFactors() : null;
+    const _msMultD = _sfDraw ? _sfDraw.moveSpeedMult : 1.0;
 
     for (const ac of actionCenters) {
       const isH  = ac.type === 'H';
@@ -13158,7 +13163,7 @@ var soundingGraph = {
       // Interpolate between physics steps using remaining accumulator time
       const _ms  = ac.moveSpeed !== undefined ? ac.moveSpeed : 0.1;
       const interpX = (_ms !== 0 && !guiControls.paused)
-        ? mod(ac.x + (_ms > 0 ? 1 : -1) * Math.abs(_ms) * 0.000003 * acAccumulator, 1.0)
+        ? mod(ac.x + (_ms > 0 ? 1 : -1) * Math.abs(_ms) * _msMultD * 0.000003 * acAccumulator, 1.0)
         : ac.x;
       const scrX = simToScreenX(interpX * sim_res_x);
       const scrY = simToScreenY(ac.y * sim_res_y);

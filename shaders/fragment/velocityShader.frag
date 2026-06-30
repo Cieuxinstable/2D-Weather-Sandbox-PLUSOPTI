@@ -93,16 +93,17 @@ void main()
           base[VX] = mix(base[VX], bgTarget, bgBlend);
         }
 
-        // 2) Band wind: localized between altMin/altMax — 45% transitions avoid KH while staying localized
+        // 2) Band wind: localized between altMin/altMax — 25% transitions keep the band localized
+        //    (narrower than 45% which inadvertently spread to the ground with typical 1500-5000m settings)
         float altMin  = acWindAltMin[ai];
         float altMax  = max(acWindAltMax[ai], altMin + 0.01);
-        float tran    = max((altMax - altMin) * 0.45, 0.04);
+        float tran    = max((altMax - altMin) * 0.25, 0.015);
         float altFact = smoothstep(altMin - tran, altMin, texCoord.y)
                       * smoothstep(altMax + tran, altMax, texCoord.y);
         float w       = hWeight * altFact;
         if (w > 0.001) {
-          float targetVX = acWindMoveX[ai] * 0.12 * acWindData[ai].z;
-          float blendStr = clamp(w * 0.04, 0.0, 0.12);
+          float targetVX = acWindMoveX[ai] * 0.07 * acWindData[ai].z;
+          float blendStr = clamp(w * 0.03, 0.0, 0.10);
           base[VX] = mix(base[VX], targetVX, blendStr);
         }
 
@@ -115,7 +116,7 @@ void main()
         // H center: calm wind progressively toward 0 at the core
         float altMin  = acWindAltMin[ai];
         float altMax  = max(acWindAltMax[ai], altMin + 0.01);
-        float tran    = max((altMax - altMin) * 0.45, 0.04);
+        float tran    = max((altMax - altMin) * 0.25, 0.015);
         float altFact = smoothstep(altMin - tran, altMin, texCoord.y)
                       * smoothstep(altMax + tran, altMax, texCoord.y);
         float w       = hWeight * altFact;
