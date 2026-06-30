@@ -80,19 +80,20 @@ void main()
     for (int ai = 0; ai < acWindCount; ai++) {
       float hDist   = absHorizontalDist(acWindData[ai].x, texCoord.x) / max(acWindRadX[ai], 0.0001);
       float hWeight = smoothstep(1.0, 0.0, hDist);
-      // wind band: full weight between altMin and altMax, soft edges
+      // wind band: bell-shaped profile with very wide transitions to minimise
+      // vertical shear — narrow transitions cause Kelvin-Helmholtz instability
       float altMin  = acWindAltMin[ai];
       float altMax  = max(acWindAltMax[ai], altMin + 0.01); // guard min > max
-      float tran    = max((altMax - altMin) * 0.25, 0.02);
+      float tran    = max((altMax - altMin) * 0.75, 0.05);  // 75% of band each side → gentle gradient
       float altFact = smoothstep(altMin - tran, altMin, texCoord.y)
                     * smoothstep(altMax + tran, altMax, texCoord.y);
       float w       = hWeight * altFact;
 
       if (w > 0.001) {
         if (abs(acWindMoveX[ai]) > 0.001) {
-          // L center: inject directional wind
+          // L center: inject directional wind — low blendStr cap avoids abrupt forcing at band edge
           float targetVX = acWindMoveX[ai] * 0.12 * acWindData[ai].z;
-          float blendStr = clamp(w * 0.05, 0.0, 0.5);
+          float blendStr = clamp(w * 0.04, 0.0, 0.15);
           base[VX] = mix(base[VX], targetVX, blendStr);
         } else {
           // H center: calm wind progressively toward 0 at the core (anticyclone = high pressure = calm)
