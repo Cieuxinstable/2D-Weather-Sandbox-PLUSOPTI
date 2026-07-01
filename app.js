@@ -5956,7 +5956,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     guiControls.acWindAltMaxL = 7000;
     guiControls.acTempL       = -2.0;
     guiControls.acHumidityL   = 0.0;
-    guiControls.acWindBgL     = 0.0;
+    guiControls.acWindBgL     = 1.0;
     guiControls.acLabel      = '';
 
     var _acDropdownController = null;
@@ -11578,7 +11578,7 @@ var soundingGraph = {
               windAltMax : type === 'H' ? guiControls.acWindAltMaxH : guiControls.acWindAltMaxL,
               tempEffect : type === 'H' ? 2.0 : -2.0,
               humidity   : type === 'L' ? (guiControls.acHumidityL || 0.0) : 0.0,
-              windBg     : type === 'L' ? (guiControls.acWindBgL   || 0.0) : 0.0,
+              windBg     : type === 'L' ? guiControls.acWindBgL : 0.0,
             };
             actionCenters.push(newAC);
             // Auto-select newly placed center
@@ -12820,7 +12820,7 @@ var soundingGraph = {
       guiControls.acTempL       = ac.tempEffect !== undefined ? ac.tempEffect : -2.0;
       guiControls.acMoveL       = ac.moveSpeed  !== undefined ? ac.moveSpeed  : 0.1;
       guiControls.acHumidityL   = ac.humidity   || 0.0;
-      guiControls.acWindBgL     = ac.windBg     || 0.0;
+      guiControls.acWindBgL     = ac.windBg     !== undefined ? ac.windBg : 1.0;
     }
     guiControls.acLabel    = ac.label || '';
     guiControls.acDropdown = ac.label + ' (' + ac.type + ')';

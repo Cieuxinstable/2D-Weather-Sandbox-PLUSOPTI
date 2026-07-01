@@ -83,24 +83,25 @@ void main()
       float hWeight = smoothstep(1.0, 0.0, hDist);
 
       if (abs(acWindMoveX[ai]) > 0.001) {
-        // L center — two-component wind:
+        // L center — two-component wind with realistic vertical profile
+        // Boundary layer: wind suppressed from 0 at surface to full above ~1000m (0.083 ≈ 1000/12000m)
+        float frictionFact = smoothstep(0.0, 0.083, texCoord.y);
 
-        // 1) Background wind: no altitude filter, very gentle uniform drift
+        // 1) Background wind: gentle uniform drift, zero at surface (friction)
         float bgIntens = acWindBg[ai];
         if (bgIntens > 0.0001 && hWeight > 0.001) {
           float bgTarget = acWindMoveX[ai] * bgIntens * 0.08;
-          float bgBlend  = clamp(hWeight * 0.006, 0.0, 0.02);
+          float bgBlend  = clamp(hWeight * frictionFact * 0.006, 0.0, 0.02);
           base[VX] = mix(base[VX], bgTarget, bgBlend);
         }
 
-        // 2) Band wind: localized between altMin/altMax — 25% transitions keep the band localized
-        //    (narrower than 45% which inadvertently spread to the ground with typical 1500-5000m settings)
+        // 2) Band wind: localized between altMin/altMax, also suppressed near surface
         float altMin  = acWindAltMin[ai];
         float altMax  = max(acWindAltMax[ai], altMin + 0.01);
         float tran    = max((altMax - altMin) * 0.25, 0.015);
         float altFact = smoothstep(altMin - tran, altMin, texCoord.y)
                       * smoothstep(altMax + tran, altMax, texCoord.y);
-        float w       = hWeight * altFact;
+        float w       = hWeight * altFact * frictionFact;
         if (w > 0.001) {
           float targetVX = acWindMoveX[ai] * 0.07 * acWindData[ai].z;
           float blendStr = clamp(w * 0.03, 0.0, 0.10);
