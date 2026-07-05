@@ -5929,22 +5929,16 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     pressure_folder.add({clearCenters: function() {
       actionCenters = [];
       selectedACIndex = -1;
-      if (rebuildACDropdown) rebuildACDropdown();
     }}, 'clearCenters').name('Clear all H/L');
     pressure_folder.add({deleteSelected: function() {
       const idx = selectedACIndex >= 0 && selectedACIndex < actionCenters.length ? selectedACIndex : -1;
       if (idx < 0) return;
       actionCenters.splice(idx, 1);
       selectedACIndex = actionCenters.length > 0 ? Math.min(idx, actionCenters.length - 1) : -1;
-      guiControls.acDropdown = selectedACIndex >= 0
-        ? actionCenters[selectedACIndex].label + ' (' + actionCenters[selectedACIndex].type + ')'
-        : 'none';
-      if (rebuildACDropdown) rebuildACDropdown();
     }}, 'deleteSelected').name('Delete selected H/L');
 
-    // ── Selected center dropdown (rebuilt dynamically when centers change) ─
+    // ── Selected center parameters ────────────────────────────────────────────
     guiControls.acAutoScale  = true;
-    guiControls.acDropdown   = 'none';
     guiControls.acIntensity  = 5;
     guiControls.acMove       = 0.1;
     guiControls.acTemp       = 0.0;
@@ -5952,27 +5946,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     guiControls.acWindBrush  = false;
     guiControls.acLabel      = '';
 
-    var _acDropdownController = null;
-    rebuildACDropdown = function() {
-      if (_acDropdownController) {
-        try { pressure_folder.remove(_acDropdownController); } catch(e) {}
-        _acDropdownController = null;
-      }
-      var opts = ['none'].concat(actionCenters.map(function(ac) { return ac.label + ' (' + ac.type + ')'; }));
-      if (opts.indexOf(guiControls.acDropdown) < 0) guiControls.acDropdown = 'none';
-      _acDropdownController = pressure_folder.add(guiControls, 'acDropdown', opts)
-        .name('Select')
-        .listen()
-        .onChange(function(val) {
-          var idx = actionCenters.findIndex(function(ac) { return ac.label + ' (' + ac.type + ')' === val; });
-          if (idx >= 0) selectAC(idx);
-          else { selectedACIndex = -1; }
-        });
-    };
-    rebuildACDropdown();
-
-    pressure_folder.add(guiControls, 'acLabel').name('Rename [enter]').listen()
-      .onChange(function() { applyACSliders(); if (rebuildACDropdown) rebuildACDropdown(); });
+    pressure_folder.add(guiControls, 'acLabel').name('Renommer').listen()
+      .onChange(function() { applyACSliders(); });
     pressure_folder.add(guiControls, 'acAutoScale').name('Auto-scale (map size)').listen();
 
     // ── Selected center parameters (adaptive panel) ────────────────────────
@@ -11439,7 +11414,11 @@ var soundingGraph = {
     }
 
     if (leftMousePressed) {
-        if (guiControls.tool == 'TOOL_NONE')
+        // AC wind brush: active regardless of current tool when checkbox is on + depression selected
+        if (guiControls.acWindBrush && selectedACIndex >= 0
+            && actionCenters[selectedACIndex] && actionCenters[selectedACIndex].type === 'L') {
+          inputType = 24;
+        } else if (guiControls.tool == 'TOOL_NONE')
           inputType = 0; // only flashlight on
         else if (guiControls.tool == 'TOOL_TEMPERATURE')
           inputType = 1;
@@ -11447,15 +11426,8 @@ var soundingGraph = {
           inputType = 2;
         else if (guiControls.tool == 'TOOL_SMOKE')
           inputType = 3;
-        else if (guiControls.tool == 'TOOL_WIND') {
-          // If AC wind brush mode is active and a depression is selected, constrain to its zone
-          if (guiControls.acWindBrush && selectedACIndex >= 0
-              && actionCenters[selectedACIndex] && actionCenters[selectedACIndex].type === 'L') {
-            inputType = 24;
-          } else {
-            inputType = 4;
-          }
-        }
+        else if (guiControls.tool == 'TOOL_WIND')
+          inputType = 4;
         else if (guiControls.tool == 'TOOL_WALL')
           inputType = 10;
         else if (guiControls.tool == 'TOOL_WALL_LAND')
@@ -11545,8 +11517,6 @@ var soundingGraph = {
             actionCenters.push(newAC);
             // Auto-select newly placed center
             selectedACIndex = actionCenters.length - 1;
-            guiControls.acDropdown = newAC.label + ' (' + newAC.type + ')';
-            if (rebuildACDropdown) rebuildACDropdown();
             guiControls.acIntensity = newAC.intensity;
             guiControls.acTemp      = newAC.tempEffect;
             guiControls.acMove      = newAC.moveSpeed;
@@ -12733,7 +12703,6 @@ var soundingGraph = {
     if (guiControls.acLabel && guiControls.acLabel.trim() !== '') {
       ac.label = guiControls.acLabel.trim();
     }
-    guiControls.acDropdown = ac.label + ' (' + ac.type + ')';
   }
 
   function selectAC(idx) {
@@ -12749,9 +12718,7 @@ var soundingGraph = {
       const li = _acHumCtrl.domElement && _acHumCtrl.domElement.closest('li');
       if (li) li.style.display = ac.type === 'L' ? '' : 'none';
     }
-    guiControls.acLabel    = ac.label || '';
-    guiControls.acDropdown = ac.label + ' (' + ac.type + ')';
-    if (rebuildACDropdown) rebuildACDropdown();
+    guiControls.acLabel = ac.label || '';
   }
 
   // ── CAPE / CIN overlay functions ───────────────────────────────────────

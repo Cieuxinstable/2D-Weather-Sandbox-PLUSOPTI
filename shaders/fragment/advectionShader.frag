@@ -370,14 +370,11 @@ void main()
           base[TEMPERATURE] += w9 * userInputValues[BRUSH_INTENSITY] * 0.003;
       }
 
-    } else if (userInputType == 24 && wall[DISTANCE] != 0) { // AC-constrained wind brush
-      float dist24 = length(vec2(absHorizontalDist(userInputValues.x, texCoord.x), userInputValues.y - texCoord.y));
-      float brushW = smoothstep(userInputValues[BRUSH_SIZE] * texelSize.y, 0.0, dist24);
+    } else if (userInputType == 24 && wall[DISTANCE] != 0) { // AC wind brush — full depression width
       float acDistX = absHorizontalDist(acZone.x, texCoord.x) / max(acZone.y, 0.0001);
-      float acW = smoothstep(1.0, 0.5, acDistX);
-      float totalW = brushW * acW;
-      if (totalW > 0.001) {
-        base.xy += userInputMove * 5.0 * totalW * userInputValues[BRUSH_INTENSITY];
+      float acW = smoothstep(1.0, 0.0, acDistX);
+      if (acW > 0.001) {
+        base.xy += userInputMove * 5.0 * acW * userInputValues[BRUSH_INTENSITY];
       }
 
     } else if (userInputType == 23 && wall[DISTANCE] != 0) { // CIN brush — create temperature inversion (cap)
@@ -562,11 +559,12 @@ void main()
     if (acHumidity[ai] > 0.001 && wall[DISTANCE] != 0) {
       float hDist = absHorizontalDist(acWindData[ai].x, texCoord.x) / max(acWindRadX[ai], 0.0001);
       float humW  = smoothstep(1.0, 0.0, hDist);
-      if (humW > 0.001) {
-        float maxW   = maxWater(realTemp);
+      float altCap = smoothstep(0.45, 0.20, texCoord.y); // injection basses couches seulement
+      if (humW > 0.001 && altCap > 0.001) {
+        float maxW    = maxWater(realTemp);
         float deficit = max(0.0, 1.0 - water[TOTAL] / max(maxW, 0.0001));
-        float humStr  = acHumidity[ai] * humW * deficit * maxW * 0.002;
-        water[TOTAL]  = min(water[TOTAL] + humStr, maxW * 0.60); // cap 60% RH
+        float humStr  = acHumidity[ai] * humW * altCap * deficit * maxW * 0.0005;
+        water[TOTAL]  = min(water[TOTAL] + humStr, maxW * 0.55); // cap 55% RH
       }
     }
   }

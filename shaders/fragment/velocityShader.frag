@@ -83,7 +83,7 @@ void main()
         // L center: gentle horizontal ascendance + temperature (no altitude filter)
         if (hWeight > 0.001) {
           float normI = acWindData[ai].z;
-          base[VY]          += 0.00003 * hWeight * normI;
+          base[VY]          += 0.000008 * hWeight * normI;
           base[TEMPERATURE] += acWindData[ai].w * 0.0001 * hWeight * normI;
         }
       } else {
