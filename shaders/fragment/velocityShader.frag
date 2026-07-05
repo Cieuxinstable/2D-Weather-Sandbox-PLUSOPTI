@@ -24,7 +24,6 @@ uniform float acWindMoveX[8];    // ±1 for L direction, 0.001 stationary L, 0 f
 uniform float acWindRadX[8];     // horizontal radius of influence (sim-space)
 uniform float acWindAltMin[8];   // wind band min altitude (normalized 0-1)
 uniform float acWindAltMax[8];   // wind band max altitude (normalized 0-1)
-uniform float acWindBg[8];       // background wind intensity (L only, no altitude restriction)
 
 uniform vec2 texelSize;
 // uniform vec2 resolution;
@@ -83,32 +82,13 @@ void main()
       float hWeight = smoothstep(1.0, 0.0, hDist);
 
       if (abs(acWindMoveX[ai]) > 0.001) {
-        // L center — two-component wind with realistic vertical profile
-        // Boundary layer: wind suppressed from 0 at surface to full above ~1000m (0.083 ≈ 1000/12000m)
-        float frictionFact = smoothstep(0.0, 0.083, texCoord.y);
-
-        // 1) Background wind: gentle uniform drift, zero at surface (friction)
-        float bgIntens = acWindBg[ai];
-        if (bgIntens > 0.0001 && hWeight > 0.001) {
-          float bgTarget = acWindMoveX[ai] * bgIntens * 0.08;
-          float bgBlend  = clamp(hWeight * frictionFact * 0.006, 0.0, 0.02);
-          base[VX] = mix(base[VX], bgTarget, bgBlend);
-        }
-
-        // 2) Band wind: localized between altMin/altMax, also suppressed near surface
+        // L center — temperature effect only (wind injected by AC brush, not automatically)
         float altMin  = acWindAltMin[ai];
         float altMax  = max(acWindAltMax[ai], altMin + 0.01);
         float tran    = max((altMax - altMin) * 0.25, 0.015);
         float altFact = smoothstep(altMin - tran, altMin, texCoord.y)
                       * smoothstep(altMax + tran, altMax, texCoord.y);
-        float w       = hWeight * altFact * frictionFact;
-        if (w > 0.001) {
-          float targetVX = acWindMoveX[ai] * 0.07 * acWindData[ai].z;
-          float blendStr = clamp(w * 0.03, 0.0, 0.10);
-          base[VX] = mix(base[VX], targetVX, blendStr);
-        }
-
-        // Temperature effect (band-localized)
+        float w       = hWeight * altFact;
         if (w > 0.001) {
           base[TEMPERATURE] += acWindData[ai].w * 0.0001 * w * acWindData[ai].z;
         }

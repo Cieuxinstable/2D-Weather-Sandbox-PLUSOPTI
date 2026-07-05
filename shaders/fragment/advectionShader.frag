@@ -55,6 +55,8 @@ uniform float acWindMoveX[8]; // ±1 for L, 0 for H (anticyclone)
 uniform float acWindRadX[8];  // horizontal radius of influence (sim-space)
 uniform float acHumidity[8];  // moisture injection strength per L center (0 = none)
 uniform float acCenterY[8];   // vertical center position (0=ground, 1=top) for L humidity band
+// AC wind brush zone — x=centerX, y=radiusX(sim-space), z=altMin(norm), w=altMax(norm)
+uniform vec4 acZone;
 
 vec2 texelSize;
 
@@ -367,6 +369,24 @@ void main()
         // Slight surface warming → stronger instability
         if (texCoord.y < 0.2)
           base[TEMPERATURE] += w9 * userInputValues[BRUSH_INTENSITY] * 0.003;
+      }
+
+    } else if (userInputType == 24 && wall[DISTANCE] != 0) { // AC-constrained wind brush
+      // Brush weight centered on cursor (same as type 4 / TOOL_WIND)
+      float dist24 = length(vec2(absHorizontalDist(userInputValues.x, texCoord.x), userInputValues.y - texCoord.y));
+      float brushW = smoothstep(userInputValues[BRUSH_SIZE] * texelSize.y, 0.0, dist24);
+      // Spatial constraint: soft edge at depression boundary (acZone.xy = centerX, radiusX)
+      float acDistX = absHorizontalDist(acZone.x, texCoord.x) / max(acZone.y, 0.0001);
+      float acW = smoothstep(1.0, 0.5, acDistX);
+      // Altitude constraint (acZone.zw = altMin, altMax — normalized 0-1)
+      float altMin24 = acZone.z;
+      float altMax24 = max(acZone.w, altMin24 + 0.01);
+      float tran24   = max((altMax24 - altMin24) * 0.25, 0.015);
+      float altW = smoothstep(altMin24 - tran24, altMin24, texCoord.y)
+                 * smoothstep(altMax24 + tran24, altMax24, texCoord.y);
+      float totalW = brushW * acW * altW;
+      if (totalW > 0.001) {
+        base.xy += userInputMove * 5.0 * totalW * userInputValues[BRUSH_INTENSITY];
       }
 
     } else if (userInputType == 23 && wall[DISTANCE] != 0) { // CIN brush — create temperature inversion (cap)
