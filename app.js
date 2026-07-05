@@ -5664,6 +5664,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   var autoExposureMinController;
   var autoExposureMaxController;
   var rebuildACDropdown = null; // set by setupDatGui, called from simulation loop
+  var _acHumCtrl = null;        // set by setupDatGui, used by selectAC to hide/show humidity row
 
   function setDatGuiControllerVisible(controller, visible)
   {
@@ -5986,7 +5987,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       });
     ac_folder.add(guiControls, 'acTemp', -5, 5, 0.5).name('Effet temp. (°C)').listen()
       .onChange(function() { applyACSliders(); });
-    var _acHumCtrl = ac_folder.add(guiControls, 'acHumidity', 0.0, 2.0, 0.05).name('Injection humidite').listen()
+    _acHumCtrl = ac_folder.add(guiControls, 'acHumidity', 0.0, 2.0, 0.05).name('Injection humidite').listen()
       .onChange(function() { applyACSliders(); });
 
     var radiation_folder = datGui.addFolder('Radiation');
