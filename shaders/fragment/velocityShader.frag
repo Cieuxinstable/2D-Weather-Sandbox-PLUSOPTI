@@ -22,8 +22,6 @@ uniform int   acWindCount;
 uniform vec4  acWindData[8];
 uniform float acWindMoveX[8];    // ±1 for L direction, 0.001 stationary L, 0 for H
 uniform float acWindRadX[8];     // horizontal radius of influence (sim-space)
-uniform float acWindAltMin[8];   // wind band min altitude (normalized 0-1)
-uniform float acWindAltMax[8];   // wind band max altitude (normalized 0-1)
 
 uniform vec2 texelSize;
 // uniform vec2 resolution;
@@ -82,30 +80,21 @@ void main()
       float hWeight = smoothstep(1.0, 0.0, hDist);
 
       if (abs(acWindMoveX[ai]) > 0.001) {
-        // L center — temperature effect only (wind injected by AC brush, not automatically)
-        float altMin  = acWindAltMin[ai];
-        float altMax  = max(acWindAltMax[ai], altMin + 0.01);
-        float tran    = max((altMax - altMin) * 0.25, 0.015);
-        float altFact = smoothstep(altMin - tran, altMin, texCoord.y)
-                      * smoothstep(altMax + tran, altMax, texCoord.y);
-        float w       = hWeight * altFact;
-        if (w > 0.001) {
-          base[TEMPERATURE] += acWindData[ai].w * 0.0001 * w * acWindData[ai].z;
+        // L center: gentle horizontal ascendance + temperature (no altitude filter)
+        if (hWeight > 0.001) {
+          float normI = acWindData[ai].z;
+          base[VY]          += 0.00003 * hWeight * normI;
+          base[TEMPERATURE] += acWindData[ai].w * 0.0001 * hWeight * normI;
         }
-
       } else {
-        // H center: calm wind progressively toward 0 at the core
-        float altMin  = acWindAltMin[ai];
-        float altMax  = max(acWindAltMax[ai], altMin + 0.01);
-        float tran    = max((altMax - altMin) * 0.25, 0.015);
-        float altFact = smoothstep(altMin - tran, altMin, texCoord.y)
-                      * smoothstep(altMax + tran, altMax, texCoord.y);
-        float w       = hWeight * altFact;
-        if (w > 0.001) {
-          float dampStr = clamp(w * 0.015 * acWindData[ai].z, 0.0, 0.12);
-          base[VX] *= (1.0 - dampStr);
-          base[VY] *= (1.0 - dampStr);
-          base[TEMPERATURE] += acWindData[ai].w * 0.0001 * w * acWindData[ai].z;
+        // H center: horizontal wind damping + gentle subsidence + temperature
+        if (hWeight > 0.001) {
+          float normI   = acWindData[ai].z;
+          float dampStr = clamp(hWeight * 0.008 * normI, 0.0, 0.05);
+          base[VX]          *= (1.0 - dampStr);
+          base[VY]          *= (1.0 - dampStr);
+          base[VY]          -= 0.00002 * hWeight * normI;
+          base[TEMPERATURE] += acWindData[ai].w * 0.0001 * hWeight * normI;
         }
       }
     }

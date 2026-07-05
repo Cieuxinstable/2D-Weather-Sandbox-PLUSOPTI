@@ -54,8 +54,7 @@ uniform vec4  acWindData[8];  // x=centerX, y=windCeiling(norm), z=normIntens, w
 uniform float acWindMoveX[8]; // ±1 for L, 0 for H (anticyclone)
 uniform float acWindRadX[8];  // horizontal radius of influence (sim-space)
 uniform float acHumidity[8];  // moisture injection strength per L center (0 = none)
-uniform float acCenterY[8];   // vertical center position (0=ground, 1=top) for L humidity band
-// AC wind brush zone — x=centerX, y=radiusX(sim-space), z=altMin(norm), w=altMax(norm)
+// AC wind brush zone — x=centerX, y=radiusX(sim-space) (z,w unused)
 uniform vec4 acZone;
 
 vec2 texelSize;
@@ -372,19 +371,11 @@ void main()
       }
 
     } else if (userInputType == 24 && wall[DISTANCE] != 0) { // AC-constrained wind brush
-      // Brush weight centered on cursor (same as type 4 / TOOL_WIND)
       float dist24 = length(vec2(absHorizontalDist(userInputValues.x, texCoord.x), userInputValues.y - texCoord.y));
       float brushW = smoothstep(userInputValues[BRUSH_SIZE] * texelSize.y, 0.0, dist24);
-      // Spatial constraint: soft edge at depression boundary (acZone.xy = centerX, radiusX)
       float acDistX = absHorizontalDist(acZone.x, texCoord.x) / max(acZone.y, 0.0001);
       float acW = smoothstep(1.0, 0.5, acDistX);
-      // Altitude constraint (acZone.zw = altMin, altMax — normalized 0-1)
-      float altMin24 = acZone.z;
-      float altMax24 = max(acZone.w, altMin24 + 0.01);
-      float tran24   = max((altMax24 - altMin24) * 0.25, 0.015);
-      float altW = smoothstep(altMin24 - tran24, altMin24, texCoord.y)
-                 * smoothstep(altMax24 + tran24, altMax24, texCoord.y);
-      float totalW = brushW * acW * altW;
+      float totalW = brushW * acW;
       if (totalW > 0.001) {
         base.xy += userInputMove * 5.0 * totalW * userInputValues[BRUSH_INTENSITY];
       }
@@ -553,39 +544,29 @@ void main()
   //   base[TEMPERATURE] += planeInfluence * 74.0; // heat
 
 
-  // H center: dry water vapor (moveX == 0 identifies anticyclone)
+  // H center: gentle horizontal drying (no altitude filter)
   for (int ai = 0; ai < acWindCount; ai++) {
     if (abs(acWindMoveX[ai]) < 0.001 && wall[DISTANCE] != 0) {
-      float ceiling = acWindData[ai].y;
-      float hDist   = absHorizontalDist(acWindData[ai].x, texCoord.x) / max(acWindRadX[ai], 0.0001);
-      float hWeight = smoothstep(1.0, 0.0, hDist);
-      float altFact = ceiling > 0.001 ? smoothstep(ceiling, ceiling * 0.15, texCoord.y) : 1.0;
-      float w       = hWeight * altFact;
-      if (w > 0.001) {
-        float dryStr = acWindData[ai].z * w * 0.001;
+      float hDist = absHorizontalDist(acWindData[ai].x, texCoord.x) / max(acWindRadX[ai], 0.0001);
+      float hW    = smoothstep(1.0, 0.0, hDist);
+      if (hW > 0.001) {
+        float dryStr = acWindData[ai].z * hW * 0.0005;
         water[TOTAL] = max(water[TOTAL] - dryStr, 0.0);
         water[CLOUD] = min(water[CLOUD], water[TOTAL]);
       }
     }
   }
 
-  // L center: humidify a band centered on the center's vertical position
+  // L center: horizontal vapor injection (no altitude bias, never saturates directly)
   for (int ai = 0; ai < acWindCount; ai++) {
     if (acHumidity[ai] > 0.001 && wall[DISTANCE] != 0) {
-      float cy       = acCenterY[ai];           // vertical position of center (0-1)
-      float band     = 0.35;                    // half-width of injection band
-      float hDist    = absHorizontalDist(acWindData[ai].x, texCoord.x) / max(acWindRadX[ai] * 2.5, 0.0001);
-      float hWeight  = smoothstep(1.0, 0.0, hDist);
-      // bell shaped band centered on cy — soft edges (0.15 transition zone)
-      float altFact  = smoothstep(cy - band, cy - band * 0.15, texCoord.y)
-                     * smoothstep(cy + band, cy + band * 0.15, texCoord.y);
-      float w        = hWeight * altFact;
-      if (w > 0.001) {
-        float maxW    = maxWater(realTemp);
-        float satFrac = clamp(water[TOTAL] / max(maxW, 0.0001), 0.0, 1.0);
-        float deficit = 1.0 - satFrac;           // 1=dry, 0=saturated — injection slows naturally
-        float humStr  = acHumidity[ai] * w * deficit * maxW * 0.015;
-        water[TOTAL]  = min(water[TOTAL] + humStr, maxW * 0.90); // never exceed 90% RH
+      float hDist = absHorizontalDist(acWindData[ai].x, texCoord.x) / max(acWindRadX[ai], 0.0001);
+      float humW  = smoothstep(1.0, 0.0, hDist);
+      if (humW > 0.001) {
+        float maxW   = maxWater(realTemp);
+        float deficit = max(0.0, 1.0 - water[TOTAL] / max(maxW, 0.0001));
+        float humStr  = acHumidity[ai] * humW * deficit * maxW * 0.002;
+        water[TOTAL]  = min(water[TOTAL] + humStr, maxW * 0.60); // cap 60% RH
       }
     }
   }

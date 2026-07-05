@@ -5944,19 +5944,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     // ── Selected center dropdown (rebuilt dynamically when centers change) ─
     guiControls.acAutoScale  = true;
     guiControls.acDropdown   = 'none';
-    guiControls.acIntensityH  = 5;
-    guiControls.acTempH       = 2.0;
-    guiControls.acMoveH       = 0.1;
-    guiControls.acWindAltMinH = 1500;
-    guiControls.acWindAltMaxH = 5000;
-    guiControls.acIntensityL  = 3;
-    guiControls.acFluxL       = 0.0;
-    guiControls.acMoveL       = 0.1;
-    guiControls.acWindAltMinL = 2000;
-    guiControls.acWindAltMaxL = 7000;
-    guiControls.acTempL       = -2.0;
-    guiControls.acHumidityL   = 0.0;
-    guiControls.acWindBrushMode = false;
+    guiControls.acIntensity  = 5;
+    guiControls.acMove       = 0.1;
+    guiControls.acTemp       = 0.0;
+    guiControls.acHumidity   = 0.0;
+    guiControls.acWindBrush  = false;
     guiControls.acLabel      = '';
 
     var _acDropdownController = null;
@@ -5982,45 +5974,19 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .onChange(function() { applyACSliders(); if (rebuildACDropdown) rebuildACDropdown(); });
     pressure_folder.add(guiControls, 'acAutoScale').name('Auto-scale (map size)').listen();
 
-    // ── H (Anticyclone) parameters ─────────────────────────────────────────
-    var ac_H_folder = pressure_folder.addFolder('H — Anticyclone');
-    ac_H_folder.add(guiControls, 'acIntensityH', 1, 10, 1).name('Intensity 1-10').listen()
+    // ── Selected center parameters (adaptive panel) ────────────────────────
+    var ac_folder = pressure_folder.addFolder('Parametres du centre');
+    ac_folder.add(guiControls, 'acWindBrush').name('Pinceau vent (outil Vent)').listen();
+    ac_folder.add(guiControls, 'acIntensity', 1, 10, 1).name('Intensite (1-10)').listen()
       .onChange(function() { applyACSliders(); });
-    ac_H_folder.add(guiControls, 'acMoveH', -5.0, 5.0, 0.1).name('Move W<0 E>0').listen()
+    ac_folder.add(guiControls, 'acMove', -5.0, 5.0, 0.01).name('Deplacement W<0 E>0').listen()
       .onChange(function() {
-        const idx = selectedACIndex >= 0 && selectedACIndex < actionCenters.length
-          ? selectedACIndex : actionCenters.length - 1;
-        const ac = actionCenters[idx];
-        if (ac && ac.type === 'H') ac.moveSpeed = guiControls.acMoveH;
+        if (selectedACIndex >= 0 && selectedACIndex < actionCenters.length)
+          actionCenters[selectedACIndex].moveSpeed = guiControls.acMove;
       });
-    ac_H_folder.add(guiControls, 'acWindAltMinH', 0, 15000, 100).name('Wind alt. min (m)').listen()
+    ac_folder.add(guiControls, 'acTemp', -5, 5, 0.5).name('Effet temp. (°C)').listen()
       .onChange(function() { applyACSliders(); });
-    ac_H_folder.add(guiControls, 'acWindAltMaxH', 0, 15000, 100).name('Wind alt. max (m)').listen()
-      .onChange(function() { applyACSliders(); });
-    ac_H_folder.add(guiControls, 'acTempH', -5, 5, 0.5).name('Temp effect (°C)').listen()
-      .onChange(function() { applyACSliders(); });
-
-    // ── L (Depression) parameters ──────────────────────────────────────────
-    var ac_L_folder = pressure_folder.addFolder('L — Depression');
-    ac_L_folder.add(guiControls, 'acWindBrushMode').name('Pinceau vent (outil Vent)').listen();
-    ac_L_folder.add(guiControls, 'acIntensityL', 1, 10, 1).name('Intensite pinceau (1-10)').listen()
-      .onChange(function() { applyACSliders(); });
-    ac_L_folder.add(guiControls, 'acFluxL', -1.0, 1.0, 0.1).name('Flux N<0 S>0').listen()
-      .onChange(function() { applyACSliders(); });
-    ac_L_folder.add(guiControls, 'acMoveL', -5.0, 5.0, 0.1).name('Move W<0 E>0').listen()
-      .onChange(function() {
-        const idx = selectedACIndex >= 0 && selectedACIndex < actionCenters.length
-          ? selectedACIndex : actionCenters.length - 1;
-        const ac = actionCenters[idx];
-        if (ac && ac.type === 'L') ac.moveSpeed = guiControls.acMoveL;
-      });
-    ac_L_folder.add(guiControls, 'acWindAltMinL', 0, 15000, 100).name('Wind alt. min (m)').listen()
-      .onChange(function() { applyACSliders(); });
-    ac_L_folder.add(guiControls, 'acWindAltMaxL', 0, 15000, 100).name('Wind alt. max (m)').listen()
-      .onChange(function() { applyACSliders(); });
-    ac_L_folder.add(guiControls, 'acTempL', -5, 5, 0.5).name('Temp effect (°C)').listen()
-      .onChange(function() { applyACSliders(); });
-    ac_L_folder.add(guiControls, 'acHumidityL', 0.0, 2.0, 0.05).name('Moisture injection').listen()
+    var _acHumCtrl = ac_folder.add(guiControls, 'acHumidity', 0.0, 2.0, 0.05).name('Injection humidite').listen()
       .onChange(function() { applyACSliders(); });
 
     var radiation_folder = datGui.addFolder('Radiation');
@@ -9716,10 +9682,7 @@ var soundingGraph = {
   const _acWindDataBuf  = new Float32Array(8 * 4);
   const _acWindMoveXBuf = new Float32Array(8);
   const _acWindRadXBuf  = new Float32Array(8);
-  const _acHumBuf        = new Float32Array(8);
-  const _acCenterYBuf    = new Float32Array(8);
-  const _acWindAltMinBuf = new Float32Array(8);
-  const _acWindAltMaxBuf = new Float32Array(8);
+  const _acHumBuf = new Float32Array(8);
   // Persistent readback buffers: avoids Float32Array(4) allocation on every fence completion
   const _thunderReadBuf  = new Float32Array(4);
   const _dropletReadBuf  = new Float32Array(4);
@@ -11269,14 +11232,11 @@ var soundingGraph = {
   const _uloc_vel_acData   = gl.getUniformLocation(velocityProgram,                    'acWindData[0]');
   const _uloc_vel_acMoveX  = gl.getUniformLocation(velocityProgram,                    'acWindMoveX[0]');
   const _uloc_vel_acRadX   = gl.getUniformLocation(velocityProgram,                    'acWindRadX[0]');
-  const _uloc_vel_acAltMin = gl.getUniformLocation(velocityProgram,                    'acWindAltMin[0]');
-  const _uloc_vel_acAltMax = gl.getUniformLocation(velocityProgram,                    'acWindAltMax[0]');
   const _uloc_adv_acCount  = gl.getUniformLocation(advectionProgram,                   'acWindCount');
   const _uloc_adv_acData   = gl.getUniformLocation(advectionProgram,                   'acWindData[0]');
   const _uloc_adv_acMoveX  = gl.getUniformLocation(advectionProgram,                   'acWindMoveX[0]');
   const _uloc_adv_acRadX   = gl.getUniformLocation(advectionProgram,                   'acWindRadX[0]');
   const _uloc_adv_acHum    = gl.getUniformLocation(advectionProgram,                   'acHumidity[0]');
-  const _uloc_adv_acCenterY= gl.getUniformLocation(advectionProgram,                   'acCenterY[0]');
   const _uloc_adv_acZone   = gl.getUniformLocation(advectionProgram,                   'acZone');
   const _uloc_precip_iter  = gl.getUniformLocation(precipitationProgram,               'iterNum');
   const _uloc_lloc_iter    = gl.getUniformLocation(lightningLocationProgram,            'iterNum');
@@ -11488,7 +11448,7 @@ var soundingGraph = {
           inputType = 3;
         else if (guiControls.tool == 'TOOL_WIND') {
           // If AC wind brush mode is active and a depression is selected, constrain to its zone
-          if (guiControls.acWindBrushMode && selectedACIndex >= 0
+          if (guiControls.acWindBrush && selectedACIndex >= 0
               && actionCenters[selectedACIndex] && actionCenters[selectedACIndex].type === 'L') {
             inputType = 24;
           } else {
@@ -11564,7 +11524,7 @@ var soundingGraph = {
             const radiusNorm = guiControls.brushSize * 0.5 / sim_res_y;
             const _sf        = guiControls.acAutoScale ? getACScaleFactors() : null;
             const _placedRadius    = _sf ? _sf.radiusAbs : radiusNorm * 4.0;
-            const _placedMoveSpeed = type === 'H' ? guiControls.acMoveH : guiControls.acMoveL;
+            const _placedMoveSpeed = guiControls.acMove;
             // moveSpeedMult applied inside updateActionCenters — ac.moveSpeed stores raw UI value
             const newAC = {
               type      : type,
@@ -11572,38 +11532,24 @@ var soundingGraph = {
               y         : clamp(mouseYinSim, 0.0, 1.0),
               radius    : _placedRadius,
               label     : type + (actionCenters.length + 1),
-              intensity : type === 'H' ? guiControls.acIntensityH : guiControls.acIntensityL,
+              intensity : guiControls.acIntensity,
               dirEast   : true,
               speed     : 0.0,
               moveSpeed : _placedMoveSpeed,
               corePressure : type === 'H' ? 1025 : 990,
               rampFactor : 0.0,
-              windAlt    : type === 'H' ? (guiControls.simHeight || sim_height) : undefined,
-              windAltMin : type === 'H' ? guiControls.acWindAltMinH : guiControls.acWindAltMinL,
-              windAltMax : type === 'H' ? guiControls.acWindAltMaxH : guiControls.acWindAltMaxL,
-              tempEffect : type === 'H' ? 2.0 : -2.0,
-              humidity   : type === 'L' ? (guiControls.acHumidityL || 0.0) : 0.0,
+              tempEffect : guiControls.acTemp,
+              humidity   : type === 'L' ? (guiControls.acHumidity || 0.0) : 0.0,
             };
             actionCenters.push(newAC);
             // Auto-select newly placed center
             selectedACIndex = actionCenters.length - 1;
             guiControls.acDropdown = newAC.label + ' (' + newAC.type + ')';
             if (rebuildACDropdown) rebuildACDropdown();
-            if (type === 'H') {
-              guiControls.acIntensityH  = newAC.intensity;
-              guiControls.acTempH       = newAC.tempEffect;
-              guiControls.acMoveH       = newAC.moveSpeed;
-              guiControls.acWindAltMinH = newAC.windAltMin;
-              guiControls.acWindAltMaxH = newAC.windAltMax;
-            } else {
-              guiControls.acIntensityL  = newAC.intensity;
-              guiControls.acFluxL       = newAC.flux      || 0.0;
-              guiControls.acWindAltMinL = newAC.windAltMin;
-              guiControls.acWindAltMaxL = newAC.windAltMax;
-              guiControls.acTempL       = newAC.tempEffect;
-              guiControls.acMoveL       = newAC.moveSpeed;
-              guiControls.acHumidityL   = newAC.humidity  || 0.0;
-            }
+            guiControls.acIntensity = newAC.intensity;
+            guiControls.acTemp      = newAC.tempEffect;
+            guiControls.acMove      = newAC.moveSpeed;
+            guiControls.acHumidity  = newAC.humidity || 0.0;
             guiControls.acLabel     = newAC.label;
             } // end else (not clicking existing center)
           }
@@ -11636,14 +11582,11 @@ var soundingGraph = {
       }
       // Upload acZone for the AC wind brush (type 24)
       if (inputType === 24 && selectedACIndex >= 0 && actionCenters[selectedACIndex]) {
-        const _acB = actionCenters[selectedACIndex];
-        const _simHB = Math.max(guiControls.simHeight, 1000);
-        const _altMinB = (_acB.windAltMin !== undefined ? _acB.windAltMin : 2000) / _simHB;
-        const _altMaxB = (_acB.windAltMax !== undefined ? _acB.windAltMax : 7000) / _simHB;
-        const _radXB   = _acB.radius * sim_res_y / Math.max(sim_res_x, 1);
-        gl.uniform4f(_uloc_adv_acZone, _acB.x, _radXB, _altMinB, _altMaxB);
+        const _acB  = actionCenters[selectedACIndex];
+        const _radXB = _acB.radius * sim_res_y / Math.max(sim_res_x, 1);
+        gl.uniform4f(_uloc_adv_acZone, _acB.x, _radXB, 0.0, 0.0);
       } else {
-        gl.uniform4f(_uloc_adv_acZone, -1.0, 0.0, 0.0, 0.0); // inactive
+        gl.uniform4f(_uloc_adv_acZone, -1.0, 0.0, 0.0, 0.0);
       }
       gl.uniform1i(_uloc_adv_userInputType, inputType);
 
@@ -11690,25 +11633,17 @@ var soundingGraph = {
               const _iMult    = _acScaleF ? _acScaleF.intensityMult : 1.0;
               const normIntens = ((ac.intensity || 5) / 10.0) * ramp * _iMult;
               const acPosX    = guiControls.wrapHorizontally ? mod(ac.x, 1.0) : clamp(ac.x, 0.0, 1.0);
-              const simH      = Math.max(guiControls.simHeight, 1000);
-              const windCeil  = (ac.windAlt !== undefined ? ac.windAlt : (ac.type === 'H' ? guiControls.simHeight : simH)) / simH;
-              const radiusX   = ac.radius * sim_res_y / Math.max(sim_res_x, 1);
-              const altMin    = (ac.windAltMin !== undefined ? ac.windAltMin : 1500) / simH;
-              const altMax    = (ac.windAltMax !== undefined ? ac.windAltMax : 5000) / simH;
-              // H = exactly 0.0 (drying loop checks abs < 0.001)
-              // L moving = ±1.0 ; L stationary = 0.001 sentinel (non-zero, avoids H-drying, negligible wind)
+              const radiusX = ac.radius * sim_res_y / Math.max(sim_res_x, 1);
+              // H = exactly 0.0; L moving = ±1.0; L stationary = 0.001 sentinel
               const moveX  = ac.type === 'L' ? (dir !== 0.0 ? dir : 0.001) : 0.0;
-              const tempFx = ac.tempEffect !== undefined ? ac.tempEffect : (ac.type === 'H' ? 2.0 : -2.0);
+              const tempFx = ac.tempEffect !== undefined ? ac.tempEffect : 0.0;
               _acWindData[_acWindCount * 4 + 0] = acPosX;
-              _acWindData[_acWindCount * 4 + 1] = windCeil;
+              _acWindData[_acWindCount * 4 + 1] = 0.0;
               _acWindData[_acWindCount * 4 + 2] = normIntens;
               _acWindData[_acWindCount * 4 + 3] = tempFx;
               _acWindMoveX[_acWindCount] = moveX;
               _acWindRadX [_acWindCount] = radiusX;
-              _acHumBuf       [_acWindCount] = ac.type === 'L' ? (ac.humidity || 0.0) : 0.0;
-              _acCenterYBuf   [_acWindCount] = ac.y;
-              _acWindAltMinBuf[_acWindCount] = altMin;
-              _acWindAltMaxBuf[_acWindCount] = altMax;
+              _acHumBuf   [_acWindCount] = ac.type === 'L' ? (ac.humidity || 0.0) : 0.0;
               _acWindCount++;
             }
           }
@@ -11729,8 +11664,6 @@ var soundingGraph = {
             gl.uniform4fv(_uloc_vel_acData,  _acWindData);
             gl.uniform1fv(_uloc_vel_acMoveX, _acWindMoveX);
             gl.uniform1fv(_uloc_vel_acRadX,  _acWindRadX);
-            gl.uniform1fv(_uloc_vel_acAltMin, _acWindAltMinBuf);
-            gl.uniform1fv(_uloc_vel_acAltMax, _acWindAltMaxBuf);
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
             // Curl + vorticity: skip odd iterations on large maps; always run when user is actively painting
@@ -11791,7 +11724,6 @@ var soundingGraph = {
             gl.uniform1fv(_uloc_adv_acMoveX, _acWindMoveX);
             gl.uniform1fv(_uloc_adv_acRadX,  _acWindRadX);
             gl.uniform1fv(_uloc_adv_acHum,   _acHumBuf);
-            gl.uniform1fv(_uloc_adv_acCenterY, _acCenterYBuf);
 
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
@@ -12794,19 +12726,9 @@ var soundingGraph = {
       : actionCenters.length - 1;
     if (idx < 0) return;
     const ac = actionCenters[idx];
-    if (ac.type === 'H') {
-      ac.intensity   = guiControls.acIntensityH;
-      ac.tempEffect  = guiControls.acTempH;
-      ac.windAltMin  = guiControls.acWindAltMinH;
-      ac.windAltMax  = guiControls.acWindAltMaxH;
-    } else {
-      ac.intensity   = guiControls.acIntensityL;
-      ac.flux        = guiControls.acFluxL;
-      ac.windAltMin  = guiControls.acWindAltMinL;
-      ac.windAltMax  = guiControls.acWindAltMaxL;
-      ac.tempEffect  = guiControls.acTempL;
-      ac.humidity    = guiControls.acHumidityL;
-    }
+    ac.intensity  = guiControls.acIntensity;
+    ac.tempEffect = guiControls.acTemp;
+    if (ac.type === 'L') ac.humidity = guiControls.acHumidity;
     if (guiControls.acLabel && guiControls.acLabel.trim() !== '') {
       ac.label = guiControls.acLabel.trim();
     }
@@ -12817,20 +12739,14 @@ var soundingGraph = {
     selectedACIndex = idx;
     if (idx < 0 || idx >= actionCenters.length) return;
     const ac = actionCenters[idx];
-    if (ac.type === 'H') {
-      guiControls.acIntensityH  = ac.intensity  || 5;
-      guiControls.acTempH       = ac.tempEffect !== undefined ? ac.tempEffect : 2.0;
-      guiControls.acMoveH       = ac.moveSpeed  !== undefined ? ac.moveSpeed  : 0.1;
-      guiControls.acWindAltMinH = ac.windAltMin !== undefined ? ac.windAltMin : 1500;
-      guiControls.acWindAltMaxH = ac.windAltMax !== undefined ? ac.windAltMax : 5000;
-    } else {
-      guiControls.acIntensityL  = ac.intensity  || 5;
-      guiControls.acFluxL       = ac.flux       || 0.0;
-      guiControls.acWindAltMinL = ac.windAltMin !== undefined ? ac.windAltMin : 1500;
-      guiControls.acWindAltMaxL = ac.windAltMax !== undefined ? ac.windAltMax : 5000;
-      guiControls.acTempL       = ac.tempEffect !== undefined ? ac.tempEffect : -2.0;
-      guiControls.acMoveL       = ac.moveSpeed  !== undefined ? ac.moveSpeed  : 0.1;
-      guiControls.acHumidityL   = ac.humidity   || 0.0;
+    guiControls.acIntensity = ac.intensity  !== undefined ? ac.intensity  : 5;
+    guiControls.acTemp      = ac.tempEffect !== undefined ? ac.tempEffect : 0.0;
+    guiControls.acMove      = ac.moveSpeed  !== undefined ? ac.moveSpeed  : 0.1;
+    guiControls.acHumidity  = ac.type === 'L' ? (ac.humidity || 0.0) : 0.0;
+    // Show humidity row only for L centers
+    if (_acHumCtrl) {
+      const li = _acHumCtrl.domElement && _acHumCtrl.domElement.closest('li');
+      if (li) li.style.display = ac.type === 'L' ? '' : 'none';
     }
     guiControls.acLabel    = ac.label || '';
     guiControls.acDropdown = ac.label + ' (' + ac.type + ')';
@@ -13120,7 +13036,7 @@ var soundingGraph = {
 
       // ── Déplacement du centre ──────────────────────────────────────────
       if (moveSpeed !== 0) {
-        const speedPerMs = Math.abs(moveSpeed) * _msMult * 0.000003;
+        const speedPerMs = Math.abs(moveSpeed) * _msMult * 0.00000075;
         ac.x = mod(ac.x + (moveSpeed > 0 ? 1 : -1) * speedPerMs * dt, 1.0);
       }
 
@@ -13173,7 +13089,7 @@ var soundingGraph = {
       // Interpolate between physics steps using remaining accumulator time
       const _ms  = ac.moveSpeed !== undefined ? ac.moveSpeed : 0.1;
       const interpX = (_ms !== 0 && !guiControls.paused)
-        ? mod(ac.x + (_ms > 0 ? 1 : -1) * Math.abs(_ms) * _msMultD * 0.000003 * acAccumulator, 1.0)
+        ? mod(ac.x + (_ms > 0 ? 1 : -1) * Math.abs(_ms) * _msMultD * 0.00000075 * acAccumulator, 1.0)
         : ac.x;
       const scrX = simToScreenX(interpX * sim_res_x);
       const scrY = simToScreenY(ac.y * sim_res_y);
