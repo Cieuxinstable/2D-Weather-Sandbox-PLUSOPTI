@@ -370,13 +370,6 @@ void main()
           base[TEMPERATURE] += w9 * userInputValues[BRUSH_INTENSITY] * 0.003;
       }
 
-    } else if (userInputType == 24 && wall[DISTANCE] != 0) { // AC wind brush — full depression width
-      float acDistX = absHorizontalDist(acZone.x, texCoord.x) / max(acZone.y, 0.0001);
-      float acW = smoothstep(1.0, 0.0, acDistX);
-      if (acW > 0.001) {
-        base.xy += userInputMove * 5.0 * acW * userInputValues[BRUSH_INTENSITY];
-      }
-
     } else if (userInputType == 23 && wall[DISTANCE] != 0) { // CIN brush — create temperature inversion (cap)
       float dist23 = length(vec2(absHorizontalDist(userInputValues.x, texCoord.x), userInputValues.y - texCoord.y));
       float w23 = smoothstep(userInputValues[BRUSH_SIZE] * texelSize.y, 0.0, dist23);
@@ -541,6 +534,15 @@ void main()
   //   base[TEMPERATURE] += planeInfluence * 74.0; // heat
 
 
+  // AC wind brush: applies over full depression width (outside inBrush — no cursor restriction)
+  if (userInputType == 24 && wall[DISTANCE] != 0) {
+    float acDistX = absHorizontalDist(acZone.x, texCoord.x) / max(acZone.y, 0.0001);
+    float acW = smoothstep(1.0, 0.0, acDistX);
+    if (acW > 0.001) {
+      base.xy += userInputMove * 5.0 * acW * userInputValues[BRUSH_INTENSITY];
+    }
+  }
+
   // H center: gentle horizontal drying (no altitude filter)
   for (int ai = 0; ai < acWindCount; ai++) {
     if (abs(acWindMoveX[ai]) < 0.001 && wall[DISTANCE] != 0) {
@@ -554,17 +556,14 @@ void main()
     }
   }
 
-  // L center: horizontal vapor injection (no altitude bias, never saturates directly)
+  // L center: gentle horizontal humidification (mirror of H drying, weaker)
   for (int ai = 0; ai < acWindCount; ai++) {
-    if (acHumidity[ai] > 0.001 && wall[DISTANCE] != 0) {
+    if (abs(acWindMoveX[ai]) > 0.001 && acHumidity[ai] > 0.001 && wall[DISTANCE] != 0) {
       float hDist = absHorizontalDist(acWindData[ai].x, texCoord.x) / max(acWindRadX[ai], 0.0001);
-      float humW  = smoothstep(1.0, 0.0, hDist);
-      float altCap = smoothstep(0.45, 0.20, texCoord.y); // injection basses couches seulement
-      if (humW > 0.001 && altCap > 0.001) {
-        float maxW    = maxWater(realTemp);
-        float deficit = max(0.0, 1.0 - water[TOTAL] / max(maxW, 0.0001));
-        float humStr  = acHumidity[ai] * humW * altCap * deficit * maxW * 0.0005;
-        water[TOTAL]  = min(water[TOTAL] + humStr, maxW * 0.55); // cap 55% RH
+      float hW    = smoothstep(1.0, 0.0, hDist);
+      if (hW > 0.001) {
+        float wetStr = acWindData[ai].z * hW * acHumidity[ai] * 0.0002;
+        water[TOTAL] = min(water[TOTAL] + wetStr, maxWater(realTemp) * 0.55);
       }
     }
   }
