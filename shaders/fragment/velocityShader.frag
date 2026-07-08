@@ -80,10 +80,10 @@ void main()
       float hWeight = smoothstep(1.0, 0.0, hDist);
 
       if (abs(acWindMoveX[ai]) > 0.001) {
-        // L center: gentle horizontal ascendance + temperature (no altitude filter)
+        // L center: direct pressure sink (no VY forcing — avoids divergence-driven convergence that reverses painted wind)
         if (hWeight > 0.001) {
           float normI = acWindData[ai].z;
-          base[VY]          += 0.000008 * hWeight * normI;
+          base[PRESSURE]    -= 0.00003 * hWeight * normI;
           base[TEMPERATURE] += acWindData[ai].w * 0.0001 * hWeight * normI;
         }
       } else {
