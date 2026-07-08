@@ -381,7 +381,7 @@ void main()
         water[CLOUD] = max(water[CLOUD] - w23 * userInputValues[BRUSH_INTENSITY] * 0.05, 0.0);
       }
 
-    } else if (userInputType >= 10) {               // wall
+    } else if (userInputType >= 10 && userInputType <= 22) { // wall (types 10-22 only)
       if (userInputValues[BRUSH_INTENSITY] > 0.0) { // build wall if positive value else remove wall
 
         bool setWall = false;
