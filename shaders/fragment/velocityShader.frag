@@ -80,10 +80,9 @@ void main()
       float hWeight = smoothstep(1.0, 0.0, hDist);
 
       if (abs(acWindMoveX[ai]) > 0.001) {
-        // L center: direct pressure sink (no VY forcing — avoids divergence-driven convergence that reverses painted wind)
+        // L center: temperature effect only — no pressure/velocity forcing (any active forcing opposes the wind brush)
         if (hWeight > 0.001) {
           float normI = acWindData[ai].z;
-          base[PRESSURE]    -= 0.00003 * hWeight * normI;
           base[TEMPERATURE] += acWindData[ai].w * 0.0001 * hWeight * normI;
         }
       } else {
