@@ -370,6 +370,16 @@ void main()
           base[TEMPERATURE] += w9 * userInputValues[BRUSH_INTENSITY] * 0.003;
       }
 
+    } else if (userInputType == 24 && wall[DISTANCE] != 0) { // AC wind brush — cursor-focused, constrained to depression zone
+      float dist24 = length(vec2(absHorizontalDist(userInputValues.x, texCoord.x), userInputValues.y - texCoord.y));
+      float brushW = smoothstep(userInputValues[BRUSH_SIZE] * texelSize.y, 0.0, dist24);
+      float acDistX = absHorizontalDist(acZone.x, texCoord.x) / max(acZone.y, 0.0001);
+      float acW = smoothstep(1.0, 0.5, acDistX);
+      float totalW = brushW * acW;
+      if (totalW > 0.001) {
+        base.xy += userInputMove * 5.0 * totalW * userInputValues[BRUSH_INTENSITY];
+      }
+
     } else if (userInputType == 23 && wall[DISTANCE] != 0) { // CIN brush — create temperature inversion (cap)
       float dist23 = length(vec2(absHorizontalDist(userInputValues.x, texCoord.x), userInputValues.y - texCoord.y));
       float w23 = smoothstep(userInputValues[BRUSH_SIZE] * texelSize.y, 0.0, dist23);
@@ -533,15 +543,6 @@ void main()
   // water[SMOKE] += planeInfluence * 0.1;                     // smoke
   //   base[TEMPERATURE] += planeInfluence * 74.0; // heat
 
-
-  // AC wind brush: applies over full depression width (outside inBrush — no cursor restriction)
-  if (userInputType == 24 && wall[DISTANCE] != 0) {
-    float acDistX = absHorizontalDist(acZone.x, texCoord.x) / max(acZone.y, 0.0001);
-    float acW = smoothstep(1.0, 0.0, acDistX);
-    if (acW > 0.001) {
-      base.xy += userInputMove * 5.0 * acW * userInputValues[BRUSH_INTENSITY];
-    }
-  }
 
   // H center: gentle horizontal drying (no altitude filter)
   for (int ai = 0; ai < acWindCount; ai++) {
