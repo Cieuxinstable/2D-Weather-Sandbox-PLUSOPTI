@@ -1286,6 +1286,7 @@ function getRadarProductIdForDisplayMode(displayMode)
 var horizontalDisplayMult = 3.0; // 3.0 to cover srceen while zoomed out
 
 var guiControls;
+var LIGHTWEIGHT_MODE = false;
 
 var displayVectorField = false;
 
@@ -3479,6 +3480,8 @@ class LoadingBar
 function setLoadingBar()
 {
   return new Promise((resolve) => {
+    LIGHTWEIGHT_MODE = !!(document.getElementById('lightweightMode')?.checked);
+
     document.body.classList.add('game-active');
     var element = document.getElementById('IntroScreen');
     element.parentNode.removeChild(element); // remove introscreen div
@@ -11822,7 +11825,7 @@ var soundingGraph = {
 
           // Radar field update: once per frame (purely visual, no simulation feedback — saves N-1 full-screen passes)
           // On large maps skip every other frame to halve the per-frame GPU cost of these full-resolution passes
-          if (!_largemap || frameNum % 2 === 0) {
+          if (!LIGHTWEIGHT_MODE && (!_largemap || frameNum % 2 === 0)) {
           gl.useProgram(radarFieldUpdateProgram);
           gl.uniform1i(_uloc_radar_mode, 0);
           gl.activeTexture(gl.TEXTURE0);
@@ -12609,27 +12612,31 @@ var soundingGraph = {
   }
 
   // ── Update + Draw action centers (H/L circles) ─────────────────────────
-  const nowAC = performance.now ? performance.now() : Date.now();
-  if (lastACUpdateTime > 0) acAccumulator += Math.min(nowAC - lastACUpdateTime, 200);
-  lastACUpdateTime = nowAC;
-  if (!guiControls.paused) {
-    while (acAccumulator >= 5) { updateActionCenters(5); acAccumulator -= 5; }
-  } else {
-    acAccumulator = 0;
+  if (!LIGHTWEIGHT_MODE) {
+    const nowAC = performance.now ? performance.now() : Date.now();
+    if (lastACUpdateTime > 0) acAccumulator += Math.min(nowAC - lastACUpdateTime, 200);
+    lastACUpdateTime = nowAC;
+    if (!guiControls.paused) {
+      while (acAccumulator >= 5) { updateActionCenters(5); acAccumulator -= 5; }
+    } else {
+      acAccumulator = 0;
+    }
+    drawActionCenters();
   }
-  drawActionCenters();
   drawCapeOverlayIfActive();
 
-  drawRadarRangeOverlay();
-  for (i = 0; i < radarTowers.length; i++) {
-    radarTowers[i].updateCanvas(); // keep position synced with camera
-  }
-  if (radarNeedsMeasure && radarTowers.length > 0) {
-    const nowRadar = performance.now ? performance.now() : Date.now();
+  if (!LIGHTWEIGHT_MODE) {
+    drawRadarRangeOverlay();
     for (i = 0; i < radarTowers.length; i++) {
-      radarTowers[i].measure(nowRadar);
+      radarTowers[i].updateCanvas(); // keep position synced with camera
     }
-    radarNeedsMeasure = false;
+    if (radarNeedsMeasure && radarTowers.length > 0) {
+      const nowRadar = performance.now ? performance.now() : Date.now();
+      for (i = 0; i < radarTowers.length; i++) {
+        radarTowers[i].measure(nowRadar);
+      }
+      radarNeedsMeasure = false;
+    }
   }
 
     wasLeftMousePressed = leftMousePressed;

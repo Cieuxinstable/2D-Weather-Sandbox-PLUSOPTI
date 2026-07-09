@@ -471,6 +471,24 @@
             gap: 10px;
         }
 
+        .lightweight-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.75rem;
+            color: var(--muted);
+            cursor: pointer;
+            user-select: none;
+            margin-top: 4px;
+        }
+        .lightweight-toggle input[type="checkbox"] {
+            accent-color: var(--accent);
+            width: 14px;
+            height: 14px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
         .btn-primary {
             font-family: var(--display);
             font-size: 1rem;
@@ -1098,6 +1116,10 @@
                     </div>
 
                     <div class="launch-btn-wrap">
+                        <label class="lightweight-toggle">
+                            <input type="checkbox" id="lightweightMode">
+                            Mode léger — recommandé pour PC modestes (désactive radar et centres d'action)
+                        </label>
                         <button type="button" class="btn-primary" onclick="loadData()">
                             ⚡ Launch New Simulation
                         </button>
@@ -1203,7 +1225,7 @@
     <script type="text/javascript" src="libraries/pako.min.js"></script>
     <script type="text/javascript" src="libraries/chart.js"></script>
     <script type="text/javascript" src="libraries/chartjs-adapter-date-fns.js"></script>
-    <script type="text/javascript" src="app.js?v=94"></script>
+    <script type="text/javascript" src="app.js?v=95"></script>
 
     <script>
         // Hour button logic
